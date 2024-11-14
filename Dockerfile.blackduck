@@ -1,0 +1,24 @@
+FROM hcm-docker.fsoft.com.vn/blackduckernode:latest as node
+
+RUN mkdir -p /app
+WORKDIR /app
+COPY ./ ./
+
+
+RUN npm install -f
+
+FROM hcm-docker.fsoft.com.vn/blackduckermaven:latest as maven
+RUN mkdir -p /app
+WORKDIR /app
+COPY --from=0 /app/ ./
+
+RUN chmod +x /synopsys-detect-6.4.1.jar && ls -lsa
+RUN java -jar /synopsys-detect-6.4.1.jar \
+                        --blackduck.url=https://blackduck.fsoft.com.vn \
+                        --blackduck.api.token=MTQ5MDVkN2ItNWU5ZS00MWQ2LWI5MmEtOTZhZDczNDgxZDUyOmI1YWRkNTE2LWVlMmYtNDEwOC1iMmUwLTgxOWNlYTJkZTU3Mw== \
+                        --detect.project.name=ICS.PCD.vkho.BE \
+                        --detect.project.version.name=vkho_product_service \
+                        --detect.npm.include.dev.dependencies=true \
+                        --detect.blackduck.signature.scanner.license.search=true \
+                        --detect.blackduck.signature.scanner.snippet.matching=FULL_SNIPPET_MATCHING \
+                        --detect.blackduck.signature.scanner.exclusion.name.patterns=outp
