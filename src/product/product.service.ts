@@ -1,9 +1,13 @@
 import { forwardRef, HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as fs from 'fs';
+import readXlsxFile from 'read-excel-file/node';
 import { BlocksService } from 'src/blocks/blocks.service';
+import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ScanType } from 'src/common/enums/scan-type.enum';
 import { IdsDTO } from 'src/common/list-id.dto';
+import { parseDate } from 'src/common/partDateTime';
 import { ResponseDTO } from 'src/common/response.dto';
 import { DECREMENT, INCREMENT, PRODUCT_CODE_PATTERN, STATUS_UPDATE_CAPACITY_ARRAY } from 'src/constants/product.constants';
 import { MasterProductsService } from 'src/master-products/master-products.service';
@@ -14,7 +18,7 @@ import { RacksService } from 'src/racks/racks.service';
 import { ReceiptsService } from 'src/receipts/receipts.service';
 import { SuppliersService } from 'src/suppliers/suppliers.service';
 import { ZoneService } from 'src/zone/zone.service';
-import { Repository, Transaction } from 'typeorm';
+import { Repository } from 'typeorm';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductFilter } from './dto/filter-product.dto';
 import { RackProductDTO } from './dto/rack-product.dto';
@@ -27,10 +31,6 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateProducts } from './dto/update-products.dto';
 import { Product } from './entities/product.entity';
 import { ProductStatus } from './enum/product-status.enum';
-import * as fs from 'fs';
-import readXlsxFile from 'read-excel-file/node';
-import { BufferedFile } from 'src/common/buffered-file.dto';
-import { parseDate } from 'src/common/partDateTime';
 
 @Injectable()
 export class ProductService {

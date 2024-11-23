@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import { ReplenishmentsService } from 'src/replenishments/replenishments.service';
 import { CreateReplenishmentDto } from 'src/replenishments/dto/create-replenishment.dto';
 import { HttpService } from '@nestjs/axios';
-import { CreateMasterProductPinnowDto } from './dto/create-master-product-pinnow.dto';
+import { CreateMasterProductDto } from './dto/create-master-product-pinnow.dto';
 
 @Injectable()
 export class MasterProductsService {
@@ -81,7 +81,7 @@ export class MasterProductsService {
     await this.masterProductRepository.save(res);
     const master = await this.masterProductRepository.findOne(res.id, { relations: ['suppliers', 'productCategory']});
     if (master) {
-      const create = new CreateMasterProductPinnowDto();
+      const create = new CreateMasterProductDto();
       create.code = master.code;
       create.categoryCode = master?.productCategory?.code;
       create.name = master.name;
@@ -115,7 +115,7 @@ export class MasterProductsService {
     .getCount();
   }
 
-  async syncDataPinnow(data: CreateMasterProductPinnowDto){
+  async syncDataPinnow(data: CreateMasterProductDto){
     const url = `${this.baseURLPinnow}/wms/v1/product/sync_update_product`;
     return this.httpService.post(url, data, {
       headers: {
@@ -391,7 +391,7 @@ export class MasterProductsService {
     const updateMasterProduct = await this.masterProductRepository.findOne(id, { relations: ["productCategory", "suppliers"] });
     if (updateMasterProduct) {
       
-      const create = new CreateMasterProductPinnowDto();
+      const create = new CreateMasterProductDto();
       create.code = updateMasterProduct.code;
       create.categoryCode = updateMasterProduct?.productCategory?.code;
       create.name = updateMasterProduct.name;
