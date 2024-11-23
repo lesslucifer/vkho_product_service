@@ -308,8 +308,8 @@ export class ProductService {
 
     if (productFilter.supplierId) {
       queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct4')
-      queryBuilder.leftJoinAndSelect('masterProduct4.supplier', 'supplier1')
-      queryBuilder.andWhere("supplier1.id = :supplierId", { supplierId: productFilter.supplierId })
+      queryBuilder.leftJoinAndSelect('masterProduct4.suppliers', 'suppliers1')
+      queryBuilder.andWhere("suppliers1.id = :supplierId", { supplierId: productFilter.supplierId })
     }
 
     if (productFilter.rackId) {
