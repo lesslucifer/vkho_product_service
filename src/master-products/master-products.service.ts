@@ -1,11 +1,19 @@
-import { forwardRef, HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { RpcException } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as fs from 'fs';
+import readXlsxFile from 'read-excel-file/node';
+import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ResponseDTO } from 'src/common/response.dto';
-import { MASTER_PRODUCT_CODE_PATTERN, MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE, MASTER_PRODUCT_CODE_PATTERN_RESOURCE } from 'src/constants/master-product.constants';
+import { MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE, MASTER_PRODUCT_CODE_PATTERN_RESOURCE } from 'src/constants/master-product.constants';
 import { ProductCategorysService } from 'src/product-categorys/product-categorys.service';
 import { ProductFilter } from 'src/product/dto/filter-product.dto';
+import { ProductStatus } from 'src/product/enum/product-status.enum';
 import { ProductService } from 'src/product/product.service';
+import { CreateReplenishmentDto } from 'src/replenishments/dto/create-replenishment.dto';
+import { ReplenishmentsService } from 'src/replenishments/replenishments.service';
 import { SuppliersService } from 'src/suppliers/suppliers.service';
 import { Repository } from 'typeorm';
 import { CreateMasterProductDto } from './dto/create-master-product.dto';
@@ -13,16 +21,7 @@ import { MasterProductFilter } from './dto/filter-master-product.dto';
 import { UpdateMasterProductDto } from './dto/update-master-product.dto';
 import { MasterProduct } from './entities/master-product.entity';
 import { MasterProductStatus } from './enums/master-product-status.enum';
-import { ConfigService } from '@nestjs/config';
-import { MasterProductMethod } from './enums/master-product-method';
-import { ProductStatus } from 'src/product/enum/product-status.enum';
-import { BufferedFile } from 'src/common/buffered-file.dto';
-import readXlsxFile from 'read-excel-file/node';
-import * as fs from 'fs';
-import { ReplenishmentsService } from 'src/replenishments/replenishments.service';
-import { CreateReplenishmentDto } from 'src/replenishments/dto/create-replenishment.dto';
-import { HttpService } from '@nestjs/axios';
-import { CreateMasterProductDto } from './dto/create-master-product-pinnow.dto';
+import { CreatePinnowMasterProductDto } from './dto/create-master-product-pinnow.dto';
 
 @Injectable()
 export class MasterProductsService {
@@ -81,7 +80,7 @@ export class MasterProductsService {
     await this.masterProductRepository.save(res);
     const master = await this.masterProductRepository.findOne(res.id, { relations: ['suppliers', 'productCategory']});
     if (master) {
-      const create = new CreateMasterProductDto();
+      const create = new CreatePinnowMasterProductDto();
       create.code = master.code;
       create.categoryCode = master?.productCategory?.code;
       create.name = master.name;
@@ -115,7 +114,7 @@ export class MasterProductsService {
     .getCount();
   }
 
-  async syncDataPinnow(data: CreateMasterProductDto){
+  async syncDataPinnow(data: CreatePinnowMasterProductDto){
     const url = `${this.baseURLPinnow}/wms/v1/product/sync_update_product`;
     return this.httpService.post(url, data, {
       headers: {
@@ -391,7 +390,7 @@ export class MasterProductsService {
     const updateMasterProduct = await this.masterProductRepository.findOne(id, { relations: ["productCategory", "suppliers"] });
     if (updateMasterProduct) {
       
-      const create = new CreateMasterProductDto();
+      const create = new CreatePinnowMasterProductDto();
       create.code = updateMasterProduct.code;
       create.categoryCode = updateMasterProduct?.productCategory?.code;
       create.name = updateMasterProduct.name;

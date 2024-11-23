@@ -1,5 +1,5 @@
 
-export class CreateMasterProductDto {
+export class CreatePinnowMasterProductDto {
     code: string;
     name: string;
     categoryCode: string;
