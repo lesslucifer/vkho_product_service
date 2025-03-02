@@ -155,7 +155,7 @@ export class ProductCategorysService {
     }
 
     if (productCategoryFilter.productCategoryName) {
-      queryBuilder.andWhere("category.name LIKE :productCategoryName", { productCategoryName: `%${productCategoryFilter.productCategoryName}%` })
+      queryBuilder.andWhere("LOWER(category.name) LIKE LOWER(:productCategoryName)", { productCategoryName: `%${productCategoryFilter.productCategoryName}%` })
     }
 
     if (productCategoryFilter.status) {
