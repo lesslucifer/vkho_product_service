@@ -26,7 +26,6 @@ import { CreatePinnowMasterProductDto } from './dto/create-master-product-pinnow
 @Injectable()
 export class MasterProductsService {
   private readonly logger = new Logger(MasterProductsService.name);
-  private readonly baseURLPinnow: string;
 
   constructor(
     @InjectRepository(MasterProduct)
@@ -41,9 +40,7 @@ export class MasterProductsService {
     @Inject(forwardRef(() => ReplenishmentsService))
     private readonly replenishmentsService: ReplenishmentsService,
     private configService: ConfigService,
-    private httpService: HttpService,
-    
-  ) { this.baseURLPinnow = process.env.BASE_URL_PINNOW }
+  ) {}
 
   async create(createMasterProductDto: CreateMasterProductDto) {
     this.logger.log(`Request to save MasterProduct`);
@@ -79,32 +76,10 @@ export class MasterProductsService {
 
     await this.masterProductRepository.save(res);
     const master = await this.masterProductRepository.findOne(res.id, { relations: ['suppliers', 'productCategory']});
-    if (master) {
-      const create = new CreatePinnowMasterProductDto();
-      create.code = master.code;
-      create.categoryCode = master?.productCategory?.code;
-      create.name = master.name;
-      create.package = master.packing; 
-      create.photo = master.image;
-      create.price = master.retailPrice;
-      create.productSkuCode = master.barCode;
-      create.unitCode = master.DVT;
-      create.wholesalePrice = master.salePrice;
-      create.wholesaleQuantity = 0;
-      create.availableQuantity = master.availableQuantity;
-      create.description = master.description;
-      create.active = true;
-      await this.timeout(1000);
-      const data = await this.syncDataPinnow(create);
-      if (data?.status !== "success") {
-        await this.masterProductRepository.delete(master.id);
-        throw new RpcException(data?.message);
-      }
-    }
     return master;
   }
 
-  timeout(ms) {
+  async timeout(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
@@ -112,18 +87,6 @@ export class MasterProductsService {
     return await this.masterProductRepository.createQueryBuilder("master")
     .where("master.isResources = :isResources", {isResources: isResources})
     .getCount();
-  }
-
-  async syncDataPinnow(data: CreatePinnowMasterProductDto){
-    const url = `${this.baseURLPinnow}/wms/v1/product/sync_update_product`;
-    return this.httpService.post(url, data, {
-      headers: {
-        "ContentType": "application/json",
-      },
-    }).toPromise().then(res => {
-      console.log(res?.data); 
-      return res.data;
-    });
   }
 
   async createExcel(createDivisonDto: BufferedFile) {
@@ -389,28 +352,6 @@ export class MasterProductsService {
     await this.masterProductRepository.save(currentMasterProduct);
     const updateMasterProduct = await this.masterProductRepository.findOne(id, { relations: ["productCategory", "suppliers"] });
     if (updateMasterProduct) {
-      
-      const create = new CreatePinnowMasterProductDto();
-      create.code = updateMasterProduct.code;
-      create.categoryCode = updateMasterProduct?.productCategory?.code;
-      create.name = updateMasterProduct.name;
-      create.package = updateMasterProduct.packing; 
-      create.photo = updateMasterProduct.image;
-      create.price = updateMasterProduct.retailPrice;
-      create.productSkuCode = updateMasterProduct.barCode;
-      create.unitCode = updateMasterProduct.DVT;
-      create.wholesalePrice = updateMasterProduct.salePrice;
-      create.wholesaleQuantity = 0;
-      create.availableQuantity = updateMasterProduct.availableQuantity;
-      create.description = updateMasterProduct.description;
-      if (updateMasterProduct.status === MasterProductStatus.DISABLE) create.active = false;
-      else create.active = true;
-      await this.timeout(1000);
-      const data = await this.syncDataPinnow(create);
-      if (data?.status !== "success") {
-        await this.masterProductRepository.save(beforeUpdate);
-        throw new RpcException(data?.message);
-      }
       return updateMasterProduct;
     }
     throw new RpcException('Not found MasterProduct');
