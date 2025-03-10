@@ -32,8 +32,6 @@ export class ProductCategorysService {
 
   private readonly logger = new Logger(ProductCategorysService.name);
 
-  private readonly baseURLPinnow: string;
-
   constructor(
     @InjectRepository(ProductCategory)
     private productCategoryRepository: Repository<ProductCategory>,
@@ -51,7 +49,7 @@ export class ProductCategorysService {
     @Inject(forwardRef(() => ParentProductCategorysService))
     private readonly parentProductCategorysService: ParentProductCategorysService,
     private httpService: HttpService,
-  ) { this.baseURLPinnow = process.env.BASE_URL_PINNOW }
+  ) {}
 
   async create(createProductCategoryDto: CreateProductCategoryDto) {
     this.logger.log(`Request to save Product Category: ${createProductCategoryDto.name}`);
@@ -70,20 +68,6 @@ export class ProductCategorysService {
 
     await this.productCategoryRepository.update(res.id, res);
     const updateProductCategory = await this.productCategoryRepository.findOne(res.id);
-    if (updateProductCategory) {
-      const data = await this.syncDataPinnow(
-        {
-          code: updateProductCategory.code, 
-          name: updateProductCategory.name,
-          parentCode: newProductCategory.parentProductCategory?.code,
-          parentName: newProductCategory.parentProductCategory?.name
-        });
-        
-      if (data?.status !== "success") {
-        await this.productCategoryRepository.delete(updateProductCategory.id);
-        throw new RpcException(data?.message);
-      }
-    }
     return updateProductCategory;
   }
 
@@ -91,18 +75,6 @@ export class ProductCategorysService {
     return this.productCategoryRepository.createQueryBuilder("parent")
       .where("parent.code LIKE :code", {code: `${code}%`})
       .getCount();
-  }
-
-  async syncDataPinnow(data){
-    const url = `${this.baseURLPinnow}/wms/v1/product/sync_update_category`;
-    return this.httpService.post(url, data, {
-      headers: {
-        "ContentType": "application/json",
-      },
-    }).toPromise().then(res => {
-      console.log(res?.data); 
-      return res.data;
-    });
   }
 
   async createExcel(createDivisonDto: BufferedFile) {
@@ -256,31 +228,6 @@ export class ProductCategorysService {
     await this.productCategoryRepository.update(id, currentProductCategory);
     const updateProductCategory = await this.productCategoryRepository.findOne(id);
     if (updateProductCategory) {
-      if (currentProductCategory.parentProductCategoryId) {
-        const data = await this.syncDataPinnow({
-          code: updateProductCategory.code, 
-          name: updateProductCategory.name,
-          parentCode: currentProductCategory.parentProductCategory?.code,
-          parentName: currentProductCategory.parentProductCategory?.name});
-
-          if (data?.status !== "success") {
-            await this.productCategoryRepository.save(beforeUpdate);
-            throw new RpcException(data?.message);
-          }
-      } else {
-        const data = await this.syncDataPinnow({
-          code: updateProductCategory.code, 
-          name: updateProductCategory.name,
-          parentCode: beforeUpdate.parentProductCategory?.code,
-          parentName: beforeUpdate.parentProductCategory?.name});
-         
-        if (data?.status !== "success") {
-          await this.productCategoryRepository.save(beforeUpdate);
-          throw new RpcException(data?.message);
-        }
-      }
-      
-      
       return updateProductCategory;
     }
     throw new RpcException('Not found product category');
