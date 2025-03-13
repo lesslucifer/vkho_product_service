@@ -22,10 +22,14 @@ import { UpdateMasterProductDto } from './dto/update-master-product.dto';
 import { MasterProduct } from './entities/master-product.entity';
 import { MasterProductStatus } from './enums/master-product-status.enum';
 import { CreatePinnowMasterProductDto } from './dto/create-master-product-pinnow.dto';
+import { QueryFailedError } from 'typeorm';
+import { MasterProductMethod } from './enums/master-product-method';
+import { InputValidator } from 'src/common/validators/input-validator';
 
 @Injectable()
 export class MasterProductsService {
   private readonly logger = new Logger(MasterProductsService.name);
+  private readonly validator = InputValidator.getInstance();
 
   constructor(
     @InjectRepository(MasterProduct)
@@ -44,39 +48,65 @@ export class MasterProductsService {
 
   async create(createMasterProductDto: CreateMasterProductDto) {
     this.logger.log(`Request to save MasterProduct`);
+    
+    // Trim string fields
+    this.validator.trimStringFields(createMasterProductDto, [
+      'name', 'packing', 'DVT', 'barCode', 'itemCode', 'description'
+    ]);
+
     this.validateInputs(createMasterProductDto);
     
-    const count = await this.countCodeResource(createMasterProductDto.isResources);
-    if (createMasterProductDto.isResources) 
-      createMasterProductDto.code = (Number(MASTER_PRODUCT_CODE_PATTERN_RESOURCE) + count).toString();
-    else 
-      createMasterProductDto.code = (Number(MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE) + count).toString();
+    try {
+      const count = await this.countCodeResource(createMasterProductDto.isResources);
+      if (createMasterProductDto.isResources) 
+        createMasterProductDto.code = (Number(MASTER_PRODUCT_CODE_PATTERN_RESOURCE) + count).toString();
+      else 
+        createMasterProductDto.code = (Number(MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE) + count).toString();
 
-    if (!createMasterProductDto.barCode) createMasterProductDto.barCode = createMasterProductDto.code;
-    await this.checkBarCode(createMasterProductDto.barCode, createMasterProductDto.warehouseId);
+      if (!createMasterProductDto.barCode) createMasterProductDto.barCode = createMasterProductDto.code;
+      await this.checkBarCode(createMasterProductDto.barCode, createMasterProductDto.warehouseId);
 
-    const newMasterProduct = this.masterProductRepository.create(createMasterProductDto);
-    
-    if (createMasterProductDto.productCategoryId)
-      newMasterProduct.productCategory = await this.productCategorysService.findOne(createMasterProductDto?.productCategoryId);
+      const newMasterProduct = this.masterProductRepository.create(createMasterProductDto);
+      
+      if (createMasterProductDto.productCategoryId)
+        newMasterProduct.productCategory = await this.productCategorysService.findOne(createMasterProductDto?.productCategoryId);
 
-    const res = await this.masterProductRepository.save(newMasterProduct);
+      const res = await this.masterProductRepository.save(newMasterProduct);
 
-    let suppliers = [];
-    if (createMasterProductDto?.supplierIds?.length > 0) {
-      for (const sup of createMasterProductDto.supplierIds) {
-        const supplier = await this.suppliersService.findOne(sup);
-        if (supplier) {
-          suppliers.push(supplier);
+      let suppliers = [];
+      if (createMasterProductDto?.supplierIds?.length > 0) {
+        for (const sup of createMasterProductDto.supplierIds) {
+          const supplier = await this.suppliersService.findOne(sup);
+          if (supplier) {
+            suppliers.push(supplier);
+          }
         }
       }
-    }
-    res.suppliers = suppliers;
-    
+      res.suppliers = suppliers;
+      
 
-    await this.masterProductRepository.save(res);
-    const master = await this.masterProductRepository.findOne(res.id, { relations: ['suppliers', 'productCategory']});
-    return master;
+      await this.masterProductRepository.save(res);
+      const master = await this.masterProductRepository.findOne(res.id, { relations: ['suppliers', 'productCategory']});
+      return master;
+    } catch (error) {
+      if (error instanceof QueryFailedError) {
+        // Handle specific database constraint violations
+        if (error.message.includes('violates not-null constraint')) {
+          const column = error.message.match(/column "(\w+)"/)?.[1];
+          throw new RpcException({
+            status: 400,
+            message: `The field '${column}' is required and cannot be null`,
+            error: 'Bad Request'
+          });
+        }
+      }
+      // For other errors, throw a generic error
+      throw new RpcException({
+        status: 500,
+        message: error.message || 'An error occurred while creating the master product',
+        error: 'Internal Server Error'
+      });
+    }
   }
 
   async timeout(ms) {
@@ -366,20 +396,23 @@ export class MasterProductsService {
   }
 
   validateInputs(currentMasterProduct) {
+    // Validate string fields
+    this.validator.validateStringFields(currentMasterProduct, [
+      { field: 'name', message: 'Name cannot be empty', required: true },
+      { field: 'packing', message: 'Packing cannot be empty', required: true }
+    ]);
 
-    // if (currentMasterProduct?.method) {
-    //   if (!Object.values(MasterProductMethod).includes(currentMasterProduct?.method))
-    //     throw new RpcException('Method incorrect!');
-    // }
+    // Validate numeric fields
+    this.validator.validateNumericFields(currentMasterProduct, [
+      { field: 'capacity', min: 0, message: 'Capacity cannot be negative', required: true },
+      { field: 'warehouseId', min: 0, message: 'Warehouse ID cannot be negative', required: true },
+      { field: 'stogareTime', min: 0, message: 'Storage time cannot be negative' }
+    ]);
 
-    // if (currentMasterProduct.capacity) {
-    //   if (currentMasterProduct.capacity < 0) throw new RpcException('Capacity incorrect!');
-    // }
-
-    // if (currentMasterProduct.stogareTime) {
-    //   if (currentMasterProduct.stogareTime < 0) throw new RpcException('Stogare time incorrect!');
-    // }
-    if (!currentMasterProduct.packing) throw new RpcException('Packing is required');
+    // Validate enum fields
+    this.validator.validateEnumFields(currentMasterProduct, [
+      { field: 'method', enum: MasterProductMethod, message: 'Invalid method' }
+    ]);
   }
 
   async checkNameProduct(name: string, warehouseId: number) {
