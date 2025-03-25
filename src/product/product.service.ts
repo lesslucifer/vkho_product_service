@@ -753,6 +753,26 @@ export class ProductService {
 
   async scan(scanProduct: ScanProduct) {
     this.logger.log(`Request to scan product`);
+    
+    // First check if products exist at all
+    if (scanProduct.productCodes?.length > 0) {
+      const existingProducts = await this.productRepository.createQueryBuilder("product")
+        .where("product.code IN (:...codes)", { codes: scanProduct.productCodes })
+        .andWhere("product.warehouseId = :warehouseId", { warehouseId: scanProduct.warehouseId })
+        .getMany();
+
+      const existingCodes = existingProducts.map(p => p.code);
+      const nonExistentCodes = scanProduct.productCodes.filter(code => !existingCodes.includes(code));
+      
+      if (nonExistentCodes.length > 0) {
+        const responseScans = new ProductScanResponse();
+        responseScans.errList = nonExistentCodes;
+        responseScans.successList = [];
+        responseScans.errorType = 'NOT_FOUND';
+        return responseScans;
+      }
+    }
+
     const queryBuilder = this.productRepository.createQueryBuilder("product");
 
     if (scanProduct.type) {
@@ -845,6 +865,7 @@ export class ProductService {
       responseScans.errList = difference;
     }
     responseScans.successList = res;
+    responseScans.errorType = difference?.length > 0 ? 'INVALID_STATUS' : undefined;
 
     if (scanProduct.rackCode) {
       const rak = await this.racksService.findOneByCode(scanProduct.rackCode, scanProduct.warehouseId);
@@ -852,9 +873,7 @@ export class ProductService {
       else throw new RpcException('Not found rack');
     }
 
-
     return responseScans;
-
   }
 
   getOnHandProductId(masterProductId: number, warehouseId: number) {
