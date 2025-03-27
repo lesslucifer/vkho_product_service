@@ -36,4 +36,5 @@ export class ProductScanResponse {
     successList: ProductDTO[]; 
     errList: string[];
     rack: Rack;
+    errorType?: 'NOT_FOUND' | 'INVALID_STATUS';
 }

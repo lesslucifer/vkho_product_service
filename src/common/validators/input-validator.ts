@@ -1,6 +1,7 @@
 import { RpcException } from '@nestjs/microservices';
 import * as moment from 'moment';
 
+
 interface StringFieldValidation {
   field: string;
   message: string;
@@ -45,7 +46,8 @@ export class InputValidator {
       if (required && !data[field]) {
         throw new RpcException({
           status: 400,
-          message: `${field} is required`,
+          message: `The field '${field}' is required and cannot be null`,
+
           error: 'Bad Request'
         });
       }
