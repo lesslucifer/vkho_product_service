@@ -22,10 +22,14 @@ import { UpdateMasterProductDto } from './dto/update-master-product.dto';
 import { MasterProduct } from './entities/master-product.entity';
 import { MasterProductStatus } from './enums/master-product-status.enum';
 import { CreatePinnowMasterProductDto } from './dto/create-master-product-pinnow.dto';
+import { QueryFailedError } from 'typeorm';
+import { MasterProductMethod } from './enums/master-product-method';
+import { InputValidator } from 'src/common/validators/input-validator';
 
 @Injectable()
 export class MasterProductsService {
   private readonly logger = new Logger(MasterProductsService.name);
+  private readonly validator = InputValidator.getInstance();
 
   constructor(
     @InjectRepository(MasterProduct)
@@ -366,20 +370,29 @@ export class MasterProductsService {
   }
 
   validateInputs(currentMasterProduct) {
+    // Validate string fields
+    this.validator.validateStringFields(currentMasterProduct, [
+      { field: 'name', message: 'Name cannot be empty', required: true },
+      { field: 'code', message: 'Code cannot be empty', required: true },
+      { field: 'packing', message: 'Packing cannot be empty', required: true }
+    ]);
 
-    // if (currentMasterProduct?.method) {
-    //   if (!Object.values(MasterProductMethod).includes(currentMasterProduct?.method))
-    //     throw new RpcException('Method incorrect!');
-    // }
+    // Validate numeric fields
+    this.validator.validateNumericFields(currentMasterProduct, [
+      { field: 'capacity', min: 0, message: 'Capacity cannot be negative', required: true },
+      { field: 'stogareTime', min: 0, message: 'Storage time cannot be negative' }
+    ]);
 
-    // if (currentMasterProduct.capacity) {
-    //   if (currentMasterProduct.capacity < 0) throw new RpcException('Capacity incorrect!');
-    // }
+    // Validate enum fields
+    this.validator.validateEnumFields(currentMasterProduct, [
+      { field: 'method', enum: MasterProductMethod, message: 'Invalid method' }
+    ]);
 
-    // if (currentMasterProduct.stogareTime) {
-    //   if (currentMasterProduct.stogareTime < 0) throw new RpcException('Stogare time incorrect!');
-    // }
-    if (!currentMasterProduct.packing) throw new RpcException('Packing is required');
+    // Validate date fields
+    this.validator.validateDateFields(currentMasterProduct, [
+      { field: 'createdAt', required: false },
+      { field: 'updatedAt', required: false }
+    ]);
   }
 
   async checkNameProduct(name: string, warehouseId: number) {
