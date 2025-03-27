@@ -1,6 +1,6 @@
 import { forwardRef, HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import moment from 'moment';
+import * as moment from 'moment';
 import { IdsDTO } from 'src/common/list-id.dto';
 import { PaginationDto } from 'src/common/pagination.dto';
 import { RECEIPT_CODE_PATTERN } from 'src/constants/receipt.constants';
@@ -47,6 +47,19 @@ export class ReceiptsService {
   async create(createReceiptDto: CreateReceiptDto) {
     this.logger.log(`Request to save Receipt: ${createReceiptDto.creatorName}`);
 
+    // Validate receipt date
+    createReceiptDto.receiptDate = this.validateReceiptDate(createReceiptDto.receiptDate);
+
+    // Validate products' expire dates first
+    if (createReceiptDto.products?.length > 0) {
+      createReceiptDto.products = createReceiptDto.products.map((element, index) => {
+        if (element.expireDate) {
+          element.expireDate = this.validateReceiptDate(element.expireDate);
+        }
+        return element;
+      });
+    }
+
     const productsTemp = createReceiptDto.products;
     delete createReceiptDto.products;
 
@@ -64,9 +77,11 @@ export class ReceiptsService {
     const res = await this.receiptRepository.save(newReceipt);
 
     let products = [];
-    productsTemp?.forEach(async element => {
-      products.push({ ...element, receipt: res });
-    });
+    if (productsTemp?.length > 0) {
+      products = await Promise.all(productsTemp.map(element => {
+        return { ...element, receipt: res };
+      }));
+    }
 
     await this.productService.createAll(products);
 
@@ -219,6 +234,34 @@ export class ReceiptsService {
     for (const id of idsDTO.ids) {
       this.remove(Number(id));
     }
+  }
+
+  private validateReceiptDate(receiptDate: any): Date {
+    if (!receiptDate) return receiptDate;
+    
+    // Parse the date using moment and keep it in UTC
+    const date = moment.utc(receiptDate);
+    
+    if (!date.isValid()) {
+      throw new RpcException({
+        status: 400,
+        message: 'Invalid Date format. Please provide a valid date',
+        error: 'Bad Request'
+      });
+    }
+
+    // Compare with today in UTC
+    const today = moment.utc().startOf('day');
+    
+    if (date.isBefore(today)) {
+      throw new RpcException({
+        status: 400,
+        message: 'Date cannot be in the past',
+        error: 'Bad Request'
+      });
+    }
+
+    return date.toDate();
   }
 }
 
