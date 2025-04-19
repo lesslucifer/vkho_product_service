@@ -17,6 +17,7 @@ import { ReportsModule } from './reports/reports.module';
 import { ParentProductCategorysModule } from './parent-product-categorys/parent-product-categorys.module';
 import { DivisonModule } from './divison/divison.module';
 import { VanModule } from './vans/van.module';
+import { BomModule } from './bom/bom.module';
 
 @Module({
   imports: [
@@ -34,7 +35,8 @@ import { VanModule } from './vans/van.module';
     ProductHistorysModule, 
     ReplenishmentsModule, 
     ShelfModule, WarehouseModule, MasterProductsModule, ReportsModule,
-    VanModule
+    VanModule,
+    BomModule
   ],
   controllers: [],
   providers: [],
