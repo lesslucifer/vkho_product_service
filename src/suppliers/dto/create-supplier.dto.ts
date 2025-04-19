@@ -8,7 +8,7 @@ export class CreateSupplierDto {
     contractNumber: string;
     taxCode: string;
     address: string;
-    cooperationDay: Date;
+    cooperationDay: string | Date;
     warehouseId: number;
     productCategoryIds: number[];
     productCategorys: ProductCategory[];
