@@ -14,6 +14,7 @@ import { SuppliersService } from 'src/suppliers/suppliers.service';
 import { ProductCategorysService } from 'src/product-categorys/product-categorys.service';
 import { ReplenishmentsService } from 'src/replenishments/replenishments.service';
 import { MasterProductsService } from 'src/master-products/master-products.service';
+import { ResponseDTO } from 'src/common/response.dto';
 
 @Injectable()
 export class BomService {
@@ -438,15 +439,23 @@ export class BomService {
     }
   }
 
-  async getAllComponents(): Promise<BomComponentDetailDto[]> {
-    this.logger.log(`Request to get all BOM components`);
+  async getAllComponents(page: number = 1, limit: number = 10): Promise<ResponseDTO> {
+    this.logger.log(`Request to get all BOM components with pagination - page: ${page}, limit: ${limit}`);
     
     try {
-      // Get all components
+      // Calculate skip and take
+      const skip = (page - 1) * limit;
+      
+      // Get total count
+      const total = await this.bomComponentRepository.count();
+      
+      // Get paginated components
       const components = await this.bomComponentRepository.find({
         order: {
           id: 'ASC'
-        }
+        },
+        skip,
+        take: limit
       });
 
       // Get component details with product information
@@ -485,7 +494,10 @@ export class BomService {
         })
       );
 
-      return componentDetails;
+      const response = new ResponseDTO();
+      response.data = componentDetails;
+      response.totalItem = total;
+      return response;
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
