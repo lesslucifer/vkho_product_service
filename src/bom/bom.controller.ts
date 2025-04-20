@@ -9,6 +9,7 @@ import { Bom } from './entities/bom.entity';
 import { ResponseDTO } from 'src/common/response.dto';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { BomComponentDetailDto, BomDetailDto } from './dto/bom-detail.dto';
+import { PaginationBomComponentDto } from './dto/pagination-bom-component.dto';
 
 @Controller()
 export class BomController {
@@ -41,7 +42,7 @@ export class BomController {
   }
 
   @MessagePattern(BOM_PATTERN.BOM_GET_ALL_COMPONENTS)
-  getAllComponents(): Promise<BomComponentDetailDto[]> {
-    return this.bomService.getAllComponents();
+  async getAllComponents(@Payload() pagination: PaginationBomComponentDto) {
+    return this.bomService.getAllComponents(pagination.page, pagination.limit);
   }
 }
