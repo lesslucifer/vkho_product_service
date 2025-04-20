@@ -7,6 +7,7 @@ export const BOM_PATTERN = {
     BOM_ADD_USER: 'bom_add_user',
     BOM_DELETE: 'bom_delete',
     BOM_GET_BY_MASTER: 'bom_get_by_master',
+    BOM_GET_ALL_COMPONENTS: 'bom_get_all_components',
   };
   
   export const BOM_SERVICE_NAME = 'BOM_SERVICE';
