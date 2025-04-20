@@ -283,15 +283,19 @@ export class BomService {
             this.logger.debug(`Component details: ${JSON.stringify(component)}`);
 
             return {
+              id: component.id,
               productId: component.productId,
               name: product.name,
               code: product.code,
               quantity: component.quantity,
               currentStock: product.totalQuantity || 0,
+              status: product.status,
               unit: component.unit || null,
               color: component.color || null,
               drawers: component.drawers || null,
-              notes: component.notes || null
+              notes: component.notes || null,
+              createdAt: component.createdAt,
+              updatedAt: component.updatedAt
             } as BomComponentDetailDto;
           })
       );
@@ -309,6 +313,7 @@ export class BomService {
       // Construct the response
       return {
         bomId: bom.id,
+        masterProductId: bom.masterProductId,
         warehouseId: bom.warehouseId,
         masterProduct: {
           id: masterProduct.id,
@@ -316,7 +321,10 @@ export class BomService {
           code: masterProduct.code
         },
         status: bom.status,
-        components: uniqueComponents
+        components: uniqueComponents,
+        createdAt: bom.createdAt,
+        updatedAt: bom.updatedAt,
+        deletedAt: bom.deletedAt
       };
     } catch (error) {
       if (error instanceof RpcException) {
@@ -381,15 +389,19 @@ export class BomService {
           }
 
           return {
+            id: component.id,
             productId: component.productId,
             name: product.name,
             code: product.code,
             quantity: component.quantity,
             currentStock: product.totalQuantity || 0,
+            status: product.status,
             unit: component.unit || null,
             color: component.color || null,
             drawers: component.drawers || null,
-            notes: component.notes || null
+            notes: component.notes || null,
+            createdAt: component.createdAt,
+            updatedAt: component.updatedAt
           } as BomComponentDetailDto;
         })
       );
@@ -397,6 +409,7 @@ export class BomService {
       // Construct the response
       return {
         bomId: bom.id,
+        masterProductId: bom.masterProductId,
         warehouseId: bom.warehouseId,
         masterProduct: {
           id: masterProduct.id,
@@ -404,7 +417,10 @@ export class BomService {
           code: masterProduct.code
         },
         status: bom.status,
-        components: componentDetails
+        components: componentDetails,
+        createdAt: bom.createdAt,
+        updatedAt: bom.updatedAt,
+        deletedAt: bom.deletedAt
       };
     } catch (error) {
       if (error instanceof RpcException) {
