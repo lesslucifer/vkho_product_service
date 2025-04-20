@@ -275,7 +275,8 @@ export class BomService {
                 id: component.productId,
                 name: 'Unknown Product',
                 code: 'UNKNOWN',
-                totalQuantity: 0
+                totalQuantity: 0,
+                supplierId: null
               };
             }
 
@@ -290,6 +291,7 @@ export class BomService {
               quantity: component.quantity,
               currentStock: product.totalQuantity || 0,
               status: product.status,
+              supplierId: product.supplierId || null,
               unit: component.unit || null,
               color: component.color || null,
               drawers: component.drawers || null,
@@ -384,7 +386,8 @@ export class BomService {
               id: component.productId,
               name: 'Unknown Product',
               code: 'UNKNOWN',
-              totalQuantity: 0
+              totalQuantity: 0,
+              supplierId: null
             };
           }
 
@@ -396,6 +399,7 @@ export class BomService {
             quantity: component.quantity,
             currentStock: product.totalQuantity || 0,
             status: product.status,
+            supplierId: product.supplierId || null,
             unit: component.unit || null,
             color: component.color || null,
             drawers: component.drawers || null,
@@ -429,6 +433,66 @@ export class BomService {
       throw new RpcException({
         status: 500,
         message: error.message || 'An error occurred while fetching BOM details',
+        error: 'Internal Server Error'
+      });
+    }
+  }
+
+  async getAllComponents(): Promise<BomComponentDetailDto[]> {
+    this.logger.log(`Request to get all BOM components`);
+    
+    try {
+      // Get all components
+      const components = await this.bomComponentRepository.find({
+        order: {
+          id: 'ASC'
+        }
+      });
+
+      // Get component details with product information
+      const componentDetails = await Promise.all(
+        components.map(async (component) => {
+          let product;
+          try {
+            product = await this.productService.findOne(component.productId);
+          } catch (error) {
+            this.logger.warn(`Component product not found with ID: ${component.productId}`);
+            product = {
+              id: component.productId,
+              name: 'Unknown Product',
+              code: 'UNKNOWN',
+              totalQuantity: 0,
+              supplierId: null
+            };
+          }
+
+          return {
+            id: component.id,
+            productId: component.productId,
+            name: product.name,
+            code: product.code,
+            quantity: component.quantity,
+            currentStock: product.totalQuantity || 0,
+            status: product.status,
+            supplierId: product.supplierId || null,
+            unit: component.unit || null,
+            color: component.color || null,
+            drawers: component.drawers || null,
+            notes: component.notes || null,
+            createdAt: component.createdAt,
+            updatedAt: component.updatedAt
+          } as BomComponentDetailDto;
+        })
+      );
+
+      return componentDetails;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException({
+        status: 500,
+        message: error.message || 'An error occurred while fetching BOM components',
         error: 'Internal Server Error'
       });
     }

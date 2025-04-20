@@ -407,7 +407,7 @@ export class ProductService {
 
   async findOne(id: number): Promise<Product> {
     this.logger.log(`Request to get products: ${id}`);
-    const product = await this.productRepository.findOne(id);
+    const product = await this.productRepository.findOne(id, { relations: ['supplier'] });
     if (product) {
       return product;
     }

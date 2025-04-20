@@ -8,7 +8,7 @@ import { BomFilter } from './dto/filter-bom.dto';
 import { Bom } from './entities/bom.entity';
 import { ResponseDTO } from 'src/common/response.dto';
 import { BufferedFile } from 'src/common/buffered-file.dto';
-import { BomDetailDto } from './dto/bom-detail.dto';
+import { BomComponentDetailDto, BomDetailDto } from './dto/bom-detail.dto';
 
 @Controller()
 export class BomController {
@@ -38,5 +38,10 @@ export class BomController {
   @MessagePattern(BOM_PATTERN.BOM_GET_ONE)
   getOne(@Payload() id: number): Promise<BomDetailDto> {
     return this.bomService.getOne(id);
+  }
+
+  @MessagePattern(BOM_PATTERN.BOM_GET_ALL_COMPONENTS)
+  getAllComponents(): Promise<BomComponentDetailDto[]> {
+    return this.bomService.getAllComponents();
   }
 }
