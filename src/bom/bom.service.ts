@@ -509,4 +509,122 @@ export class BomService {
       });
     }
   }
+
+  async getByWarehouseId(warehouseId: number): Promise<BomDetailDto[]> {
+    this.logger.log(`Request to get BOMs for warehouse ID: ${warehouseId}`);
+    
+    try {
+      // Find all BOMs with their components for the given warehouse
+      const boms = await this.bomRepository
+        .createQueryBuilder('bom')
+        .leftJoinAndSelect('bom.components', 'components')
+        .where('bom.warehouseId = :warehouseId', { warehouseId })
+        .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
+        .orderBy('bom.id', 'ASC') // Order BOMs by ID
+        .addOrderBy('components.id', 'ASC') // Order components by ID
+        .getMany();
+
+      if (!boms || boms.length === 0) {
+        throw new RpcException({
+          status: 404,
+          message: `No BOMs found for warehouse ID: ${warehouseId}`,
+          error: 'Not Found'
+        });
+      }
+
+      // Process each BOM to get full details
+      const bomDetails = await Promise.all(
+        boms.map(async (bom) => {
+          // Get master product details
+          let masterProduct;
+          try {
+            masterProduct = await this.masterProductsService.findOne(bom.masterProductId);
+          } catch (error) {
+            this.logger.warn(`Master product not found with ID: ${bom.masterProductId}`);
+            masterProduct = {
+              id: bom.masterProductId,
+              name: 'Unknown Product',
+              code: 'UNKNOWN'
+            };
+          }
+
+          // Get component details
+          const componentDetails = await Promise.all(
+            bom.components
+              .filter(component => component.bomId === bom.id) // Filter components by correct bomId
+              .map(async (component) => {
+                let product;
+                try {
+                  product = await this.productService.findOne(component.productId);
+                } catch (error) {
+                  this.logger.warn(`Component product not found with ID: ${component.productId}`);
+                  product = {
+                    id: component.productId,
+                    name: 'Unknown Product',
+                    code: 'UNKNOWN',
+                    totalQuantity: 0,
+                    supplierId: null
+                  };
+                }
+
+                return {
+                  id: component.id,
+                  productId: component.productId,
+                  name: product.name,
+                  code: product.code,
+                  quantity: component.quantity,
+                  currentStock: product.totalQuantity || 0,
+                  status: product.status,
+                  supplierId: product.supplierId || null,
+                  unit: component.unit || null,
+                  color: component.color || null,
+                  drawers: component.drawers || null,
+                  notes: component.notes || null,
+                  createdAt: component.createdAt,
+                  updatedAt: component.updatedAt
+                } as BomComponentDetailDto;
+              })
+          );
+
+          // Remove duplicates based on productId
+          const uniqueComponents = componentDetails.reduce((acc, current) => {
+            const x = acc.find(item => item.productId === current.productId);
+            if (!x) {
+              return acc.concat([current]);
+            } else {
+              return acc;
+            }
+          }, []);
+
+          // Construct the response for each BOM
+          return {
+            bomId: bom.id,
+            masterProductId: bom.masterProductId,
+            warehouseId: bom.warehouseId,
+            masterProduct: {
+              id: masterProduct.id,
+              name: masterProduct.name,
+              code: masterProduct.code
+            },
+            status: bom.status,
+            components: uniqueComponents,
+            createdAt: bom.createdAt,
+            updatedAt: bom.updatedAt,
+            deletedAt: bom.deletedAt
+          } as BomDetailDto;
+        })
+      );
+
+      return bomDetails;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      throw new RpcException({
+        status: 500,
+        message: error.message || 'An error occurred while fetching BOM details by warehouse',
+        error: 'Internal Server Error'
+      });
+    }
+  }
 }

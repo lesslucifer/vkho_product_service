@@ -36,6 +36,11 @@ export class BomController {
     return this.bomService.getByMasterProductId(masterProductId);
   }
 
+  @MessagePattern(BOM_PATTERN.BOM_GET_BY_WAREHOUSE)
+  getByWarehouse(@Payload() warehouseId: number): Promise<BomDetailDto[]> {
+    return this.bomService.getByWarehouseId(warehouseId);
+  }
+
   @MessagePattern(BOM_PATTERN.BOM_GET_ONE)
   getOne(@Payload() id: number): Promise<BomDetailDto> {
     return this.bomService.getOne(id);
