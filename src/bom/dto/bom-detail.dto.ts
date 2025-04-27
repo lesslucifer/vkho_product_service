@@ -6,8 +6,8 @@ export class BomComponentDetailDto {
   @ApiProperty({ description: 'Component ID' })
   id: number;
 
-  @ApiProperty({ description: 'Product ID' })
-  productId: number;
+  @ApiProperty({ description: 'Master Product ID' })
+  masterProductId: number;
 
   @ApiProperty({ description: 'Product name' })
   name: string;
@@ -47,24 +47,14 @@ export class BomDetailDto {
   @ApiProperty({ description: 'BOM ID' })
   bomId: number;
 
-  @ApiProperty({ description: 'Master product ID' })
-  masterProductId: number;
-
   @ApiProperty({ description: 'Warehouse ID' })
   warehouseId: number;
-
-  @ApiProperty({ description: 'Master product details' })
-  masterProduct: {
-    id: number;
-    name: string;
-    code: string;
-  };
 
   @ApiProperty({ description: 'BOM status', enum: BomStatus })
   status: BomStatus;
 
   @ApiProperty({ description: 'List of components with details', type: [BomComponentDetailDto] })
-  components: BomComponentDetailDto[];
+  bomComponents: BomComponentDetailDto[];
 
   @ApiProperty({ description: 'BOM creation date' })
   createdAt: Date;

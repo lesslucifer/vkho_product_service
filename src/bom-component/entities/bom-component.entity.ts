@@ -1,6 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
 import { Bom } from '../../bom/entities/bom.entity';
-import { Product } from '../../product/entities/product.entity';
+import { MasterProduct } from 'src/master-products/entities/master-product.entity';
 
 @Entity('bom_component')
 export class BomComponent {
@@ -10,8 +10,15 @@ export class BomComponent {
   @Column({ name: 'bomId' })
   bomId: number;
 
-  @Column({ name: 'productId' })
-  productId: number;
+  @Column({ name: 'masterProductId' })
+  masterProductId: number;
+
+  @ManyToOne(() => MasterProduct, { 
+    onDelete: 'CASCADE',
+    createForeignKeyConstraints: true
+  })
+  @JoinColumn({ name: 'masterProductId' })
+  masterProduct: MasterProduct;
 
   @Column({ type: 'numeric', precision: 10, scale: 2 })
   quantity: number;
@@ -28,9 +35,9 @@ export class BomComponent {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @ManyToOne(() => Bom, bom => bom.components, { 
+  @ManyToOne(() => Bom, bom => bom.bomComponents, { 
     onDelete: 'CASCADE',
-    createForeignKeyConstraints: false // This prevents TypeORM from creating additional columns
+    createForeignKeyConstraints: false
   })
   bom: Bom;
 
