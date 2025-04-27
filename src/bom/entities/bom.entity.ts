@@ -1,23 +1,25 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { BomComponent } from '../../bom-component/entities/bom-component.entity';
 import { BomStatus } from '../enum/bom-status.enum';
+import { Warehouse } from 'src/warehouse/entities/warehouse.entity';
 
 @Entity('bom')
 export class Bom {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'masterProductId' })
-  masterProductId: number;
-
-  @Column({ name: 'warehouseId' })
-  warehouseId: number;
+  @ManyToOne(() => Warehouse, { 
+    onDelete: 'CASCADE',
+    createForeignKeyConstraints: true
+  })
+  @JoinColumn({ name: 'warehouseId' })
+  warehouse: Warehouse;
 
   @Column({ type: 'varchar', length: 20 })
   status: BomStatus;
 
   @OneToMany(() => BomComponent, component => component.bom)
-  components: BomComponent[];
+  bomComponents: BomComponent[];
 
   @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;

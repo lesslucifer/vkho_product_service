@@ -15,6 +15,7 @@ import { ProductCategorysService } from 'src/product-categorys/product-categorys
 import { ReplenishmentsService } from 'src/replenishments/replenishments.service';
 import { MasterProductsService } from 'src/master-products/master-products.service';
 import { ResponseDTO } from 'src/common/response.dto';
+import { BomStatus } from './enum/bom-status.enum';
 
 @Injectable()
 export class BomService {
@@ -45,28 +46,48 @@ export class BomService {
     this.logger.log(`Request to save BOM`);
     
     try {
+      // Validate and transform status
+      if (createBomDto.status) {
+        const validStatus = Object.values(BomStatus).includes(createBomDto.status as BomStatus);
+        if (!validStatus) {
+          throw new RpcException({
+            status: 400,
+            message: `Invalid status value. Must be one of: ${Object.values(BomStatus).join(', ')}`,
+            error: 'Bad Request'
+          });
+        }
+      }
+
       // Create and save the BOM
-      const newBom = this.bomRepository.create(createBomDto);
+      const newBom = this.bomRepository.create({
+        warehouse: { id: createBomDto.warehouseId },
+        status: createBomDto.status || BomStatus.ACTIVE
+      });
       const savedBom = await this.bomRepository.save(newBom);
 
       // Create and save the BOM components
-      if (createBomDto.components && createBomDto.components.length > 0) {
+      if (createBomDto.bomComponents && createBomDto.bomComponents.length > 0) {
         // Create new components with the correct bomId
-        const components = createBomDto.components.map(component => {
+        const bomComponents = createBomDto.bomComponents.map(component => {
           return this.bomComponentRepository.create({
-            ...component,
-            bomId: savedBom.id
+            masterProduct: { id: component.masterProductId },
+            quantity: component.quantity,
+            unit: component.unit,
+            color: component.color,
+            drawers: component.drawers,
+            notes: component.notes,
+            bom: savedBom
           });
         });
 
         // Save components in a single transaction
-        await this.bomComponentRepository.save(components);
+        await this.bomComponentRepository.save(bomComponents);
       }
 
       // Reload the BOM with its components
       return await this.bomRepository.findOne({
         where: { id: savedBom.id },
-        relations: ['components']
+        relations: ['bomComponents', 'warehouse']
       });
     } catch (error) {
       if (error instanceof QueryFailedError) {
@@ -93,10 +114,22 @@ export class BomService {
     this.logger.log(`Request to update BOM with ID: ${updateBomDto.id}`);
     
     try {
+      // Validate and transform status
+      if (updateBomDto.status) {
+        const validStatus = Object.values(BomStatus).includes(updateBomDto.status as BomStatus);
+        if (!validStatus) {
+          throw new RpcException({
+            status: 400,
+            message: `Invalid status value. Must be one of: ${Object.values(BomStatus).join(', ')}`,
+            error: 'Bad Request'
+          });
+        }
+      }
+
       // Find the existing BOM
       const existingBom = await this.bomRepository.findOne({
         where: { id: updateBomDto.id },
-        relations: ['components']
+        relations: ['bomComponents', 'warehouse']
       });
 
       if (!existingBom) {
@@ -115,51 +148,43 @@ export class BomService {
       // Save the updated BOM
       const updatedBom = await this.bomRepository.save(existingBom);
 
-      // Handle components update if provided
-      if (updateBomDto.components && updateBomDto.components.length > 0) {
-        // Get existing component IDs
-        const existingComponentIds = existingBom.components.map(c => c.id);
-        
+      // Handle components update
+      if (updateBomDto.bomComponents && updateBomDto.bomComponents.length > 0) {
         // Update or create components
-        const updatedComponents = await Promise.all(
-          updateBomDto.components.map(async (componentDto) => {
-            // Find existing component by productId
-            const existingComponent = existingBom.components.find(
-              c => c.productId === componentDto.productId
-            );
+        for (const componentDto of updateBomDto.bomComponents) {
+          const existingComponent = existingBom.bomComponents.find(
+            c => c.id === parseInt(componentDto.id.toString())
+          );
 
-            if (existingComponent) {
-              // Update existing component
-              return this.bomComponentRepository.save({
-                ...existingComponent,
-                ...componentDto,
-                bomId: updatedBom.id
-              });
-            } else {
-              // Create new component
-              return this.bomComponentRepository.save({
-                ...componentDto,
-                bomId: updatedBom.id
-              });
-            }
-          })
-        );
-
-        // Remove components that are no longer in the update DTO
-        const updatedComponentIds = updatedComponents.map(c => c.id);
-        const componentsToRemove = existingBom.components.filter(
-          c => !updatedComponentIds.includes(c.id)
-        );
-
-        if (componentsToRemove.length > 0) {
-          await this.bomComponentRepository.remove(componentsToRemove);
+          if (existingComponent) {
+            // Update existing component
+            existingComponent.masterProduct = { id: componentDto.masterProductId } as any;
+            existingComponent.quantity = parseFloat(componentDto.quantity.toString());
+            existingComponent.unit = componentDto.unit;
+            existingComponent.color = componentDto.color;
+            existingComponent.drawers = componentDto.drawers;
+            existingComponent.notes = componentDto.notes;
+            await this.bomComponentRepository.save(existingComponent);
+          } else {
+            // Create new component if it doesn't exist
+            const newComponent = this.bomComponentRepository.create({
+              masterProduct: { id: componentDto.masterProductId },
+              quantity: parseFloat(componentDto.quantity.toString()),
+              unit: componentDto.unit,
+              color: componentDto.color,
+              drawers: componentDto.drawers,
+              notes: componentDto.notes,
+              bom: updatedBom
+            });
+            await this.bomComponentRepository.save(newComponent);
+          }
         }
       }
 
-      // Reload the BOM with its components
+      // Reload the BOM with its components and warehouse
       return await this.bomRepository.findOne({
         where: { id: updatedBom.id },
-        relations: ['components']
+        relations: ['bomComponents', 'warehouse']
       });
     } catch (error) {
       if (error instanceof QueryFailedError) {
@@ -186,10 +211,10 @@ export class BomService {
     this.logger.log(`Request to soft delete BOM with ID: ${id}`);
     
     try {
-      // Find the BOM with its components
+      // Find the BOM with its components and warehouse
       const bom = await this.bomRepository.findOne({
         where: { id },
-        relations: ['components']
+        relations: ['bomComponents', 'warehouse']
       });
 
       if (!bom) {
@@ -200,13 +225,48 @@ export class BomService {
         });
       }
 
-      // Soft delete the BOM
-      await this.bomRepository.softDelete(id);
+      // Soft delete the BOM components first
+      if (bom.bomComponents && bom.bomComponents.length > 0) {
+        await Promise.all(
+          bom.bomComponents.map(component => 
+            this.bomComponentRepository.softDelete(component.id)
+          )
+        );
+      }
+
+      // Update BOM status to INACTIVE and soft delete
+      await this.bomRepository.update(id, {
+        status: BomStatus.INACTIVE,
+        deletedAt: new Date()
+      });
+
+      // Get the deleted BOM details for response
+      const deletedBom = {
+        id: bom.id,
+        status: BomStatus.INACTIVE,
+        createdAt: bom.createdAt,
+        updatedAt: bom.updatedAt,
+        deletedAt: new Date(),
+        bomComponents: bom.bomComponents.map(component => ({
+          id: component.id,
+          bomId: component.bomId,
+          masterProductId: component.masterProductId,
+          quantity: component.quantity,
+          unit: component.unit,
+          color: component.color,
+          drawers: component.drawers,
+          notes: component.notes,
+          createdAt: component.createdAt,
+          updatedAt: component.updatedAt,
+          deletedAt: new Date()
+        })),
+        warehouse: bom.warehouse
+      };
 
       return {
         status: 200,
-        message: `BOM with ID ${id} has been successfully soft deleted`,
-        data: null
+        message: `BOM with ID ${id} has been successfully soft deleted and disabled`,
+        data: deletedBom
       };
     } catch (error) {
       if (error instanceof QueryFailedError) {
@@ -232,13 +292,14 @@ export class BomService {
     this.logger.log(`Request to get BOM for master product ID: ${masterProductId}`);
     
     try {
-      // Find the BOM with its components
+      // Find the BOM with its components and warehouse
       const bom = await this.bomRepository
         .createQueryBuilder('bom')
-        .leftJoinAndSelect('bom.components', 'components')
+        .leftJoinAndSelect('bom.bomComponents', 'bomComponents')
+        .leftJoinAndSelect('bom.warehouse', 'warehouse')
         .where('bom.masterProductId = :masterProductId', { masterProductId })
         .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
-        .orderBy('components.id', 'ASC') // Order components by ID
+        .orderBy('bomComponents.id', 'ASC') // Order components by ID
         .getOne();
 
       if (!bom) {
@@ -249,50 +310,33 @@ export class BomService {
         });
       }
 
-      // Get master product details
-      let masterProduct;
-      try {
-        masterProduct = await this.masterProductsService.findOne(bom.masterProductId);
-      } catch (error) {
-        this.logger.warn(`Master product not found with ID: ${bom.masterProductId}`);
-        masterProduct = {
-          id: bom.masterProductId,
-          name: 'Unknown Product',
-          code: 'UNKNOWN'
-        };
-      }
-
-      // Get component details
+      // Get component details with master product information
       const componentDetails = await Promise.all(
-        bom.components
+        bom.bomComponents
           .filter(component => component.bomId === bom.id) // Filter components by correct bomId
           .map(async (component) => {
-            let product;
+            let masterProduct;
             try {
-              product = await this.productService.findOne(component.productId);
+              masterProduct = await this.masterProductsService.findOne(component.masterProductId);
             } catch (error) {
-              this.logger.warn(`Component product not found with ID: ${component.productId}`);
-              product = {
-                id: component.productId,
+              this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
+              masterProduct = {
+                id: component.masterProductId,
                 name: 'Unknown Product',
                 code: 'UNKNOWN',
-                totalQuantity: 0,
-                supplierId: null
+                availableQuantity: 0,
+                status: null
               };
             }
 
-            // Log component details for debugging
-            this.logger.debug(`Component details: ${JSON.stringify(component)}`);
-
             return {
               id: component.id,
-              productId: component.productId,
-              name: product.name,
-              code: product.code,
+              masterProductId: component.masterProductId,
+              name: masterProduct.name,
+              code: masterProduct.code,
               quantity: component.quantity,
-              currentStock: product.totalQuantity || 0,
-              status: product.status,
-              supplierId: product.supplierId || null,
+              currentStock: masterProduct.availableQuantity || 0,
+              status: masterProduct.status,
               unit: component.unit || null,
               color: component.color || null,
               drawers: component.drawers || null,
@@ -303,9 +347,9 @@ export class BomService {
           })
       );
 
-      // Remove duplicates based on productId
+      // Remove duplicates based on masterProductId
       const uniqueComponents = componentDetails.reduce((acc, current) => {
-        const x = acc.find(item => item.productId === current.productId);
+        const x = acc.find(item => item.masterProductId === current.masterProductId);
         if (!x) {
           return acc.concat([current]);
         } else {
@@ -316,15 +360,9 @@ export class BomService {
       // Construct the response
       return {
         bomId: bom.id,
-        masterProductId: bom.masterProductId,
-        warehouseId: bom.warehouseId,
-        masterProduct: {
-          id: masterProduct.id,
-          name: masterProduct.name,
-          code: masterProduct.code
-        },
+        warehouseId: bom.warehouse?.id,
         status: bom.status,
-        components: uniqueComponents,
+        bomComponents: uniqueComponents,
         createdAt: bom.createdAt,
         updatedAt: bom.updatedAt,
         deletedAt: bom.deletedAt
@@ -348,10 +386,10 @@ export class BomService {
       // Find the BOM with its components
       const bom = await this.bomRepository
         .createQueryBuilder('bom')
-        .leftJoinAndSelect('bom.components', 'components')
+        .leftJoinAndSelect('bom.bomComponents', 'bomComponents')
         .where('bom.id = :id', { id })
         .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
-        .orderBy('components.id', 'ASC') // Order components by ID
+        .orderBy('bomComponents.id', 'ASC') // Order components by ID
         .getOne();
 
       if (!bom) {
@@ -362,45 +400,31 @@ export class BomService {
         });
       }
 
-      // Get master product details
-      let masterProduct;
-      try {
-        masterProduct = await this.masterProductsService.findOne(bom.masterProductId);
-      } catch (error) {
-        this.logger.warn(`Master product not found with ID: ${bom.masterProductId}`);
-        masterProduct = {
-          id: bom.masterProductId,
-          name: 'Unknown Product',
-          code: 'UNKNOWN'
-        };
-      }
-
-      // Get component details
+      // Get component details with master product information
       const componentDetails = await Promise.all(
-        bom.components.map(async (component) => {
-          let product;
+        bom.bomComponents.map(async (component) => {
+          let masterProduct;
           try {
-            product = await this.productService.findOne(component.productId);
+            masterProduct = await this.masterProductsService.findOne(component.masterProductId);
           } catch (error) {
-            this.logger.warn(`Component product not found with ID: ${component.productId}`);
-            product = {
-              id: component.productId,
+            this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
+            masterProduct = {
+              id: component.masterProductId,
               name: 'Unknown Product',
               code: 'UNKNOWN',
-              totalQuantity: 0,
-              supplierId: null
+              availableQuantity: 0,
+              status: null
             };
           }
 
           return {
             id: component.id,
-            productId: component.productId,
-            name: product.name,
-            code: product.code,
+            masterProductId: component.masterProductId,
+            name: masterProduct.name,
+            code: masterProduct.code,
             quantity: component.quantity,
-            currentStock: product.totalQuantity || 0,
-            status: product.status,
-            supplierId: product.supplierId || null,
+            currentStock: masterProduct.availableQuantity || 0,
+            status: masterProduct.status,
             unit: component.unit || null,
             color: component.color || null,
             drawers: component.drawers || null,
@@ -414,15 +438,9 @@ export class BomService {
       // Construct the response
       return {
         bomId: bom.id,
-        masterProductId: bom.masterProductId,
-        warehouseId: bom.warehouseId,
-        masterProduct: {
-          id: masterProduct.id,
-          name: masterProduct.name,
-          code: masterProduct.code
-        },
+        warehouseId: bom.warehouse?.id,
         status: bom.status,
-        components: componentDetails,
+        bomComponents: componentDetails,
         createdAt: bom.createdAt,
         updatedAt: bom.updatedAt,
         deletedAt: bom.deletedAt
@@ -458,32 +476,31 @@ export class BomService {
         take: limit
       });
 
-      // Get component details with product information
+      // Get component details with master product information
       const componentDetails = await Promise.all(
         components.map(async (component) => {
-          let product;
+          let masterProduct;
           try {
-            product = await this.productService.findOne(component.productId);
+            masterProduct = await this.masterProductsService.findOne(component.masterProductId);
           } catch (error) {
-            this.logger.warn(`Component product not found with ID: ${component.productId}`);
-            product = {
-              id: component.productId,
+            this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
+            masterProduct = {
+              id: component.masterProductId,
               name: 'Unknown Product',
               code: 'UNKNOWN',
-              totalQuantity: 0,
-              supplierId: null
+              availableQuantity: 0,
+              status: null
             };
           }
 
           return {
             id: component.id,
-            productId: component.productId,
-            name: product.name,
-            code: product.code,
+            masterProductId: component.masterProductId,
+            name: masterProduct.name,
+            code: masterProduct.code,
             quantity: component.quantity,
-            currentStock: product.totalQuantity || 0,
-            status: product.status,
-            supplierId: product.supplierId || null,
+            currentStock: masterProduct.availableQuantity || 0,
+            status: masterProduct.status,
             unit: component.unit || null,
             color: component.color || null,
             drawers: component.drawers || null,
@@ -514,14 +531,15 @@ export class BomService {
     this.logger.log(`Request to get BOMs for warehouse ID: ${warehouseId}`);
     
     try {
-      // Find all BOMs with their components for the given warehouse
+      // Find all BOMs with their components and warehouse for the given warehouse
       const boms = await this.bomRepository
         .createQueryBuilder('bom')
-        .leftJoinAndSelect('bom.components', 'components')
+        .leftJoinAndSelect('bom.bomComponents', 'bomComponents')
+        .leftJoinAndSelect('bom.warehouse', 'warehouse')
         .where('bom.warehouseId = :warehouseId', { warehouseId })
         .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
         .orderBy('bom.id', 'ASC') // Order BOMs by ID
-        .addOrderBy('components.id', 'ASC') // Order components by ID
+        .addOrderBy('bomComponents.id', 'ASC') // Order components by ID
         .getMany();
 
       if (!boms || boms.length === 0) {
@@ -535,47 +553,33 @@ export class BomService {
       // Process each BOM to get full details
       const bomDetails = await Promise.all(
         boms.map(async (bom) => {
-          // Get master product details
-          let masterProduct;
-          try {
-            masterProduct = await this.masterProductsService.findOne(bom.masterProductId);
-          } catch (error) {
-            this.logger.warn(`Master product not found with ID: ${bom.masterProductId}`);
-            masterProduct = {
-              id: bom.masterProductId,
-              name: 'Unknown Product',
-              code: 'UNKNOWN'
-            };
-          }
-
-          // Get component details
+          // Get component details with master product information
           const componentDetails = await Promise.all(
-            bom.components
+            bom.bomComponents
               .filter(component => component.bomId === bom.id) // Filter components by correct bomId
               .map(async (component) => {
-                let product;
+                let masterProduct;
                 try {
-                  product = await this.productService.findOne(component.productId);
+                  masterProduct = await this.masterProductsService.findOne(component.masterProductId);
                 } catch (error) {
-                  this.logger.warn(`Component product not found with ID: ${component.productId}`);
-                  product = {
-                    id: component.productId,
+                  this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
+                  masterProduct = {
+                    id: component.masterProductId,
                     name: 'Unknown Product',
                     code: 'UNKNOWN',
-                    totalQuantity: 0,
-                    supplierId: null
+                    availableQuantity: 0,
+                    status: null
                   };
                 }
 
                 return {
                   id: component.id,
-                  productId: component.productId,
-                  name: product.name,
-                  code: product.code,
+                  masterProductId: component.masterProductId,
+                  name: masterProduct.name,
+                  code: masterProduct.code,
                   quantity: component.quantity,
-                  currentStock: product.totalQuantity || 0,
-                  status: product.status,
-                  supplierId: product.supplierId || null,
+                  currentStock: masterProduct.availableQuantity || 0,
+                  status: masterProduct.status,
                   unit: component.unit || null,
                   color: component.color || null,
                   drawers: component.drawers || null,
@@ -586,9 +590,9 @@ export class BomService {
               })
           );
 
-          // Remove duplicates based on productId
+          // Remove duplicates based on masterProductId
           const uniqueComponents = componentDetails.reduce((acc, current) => {
-            const x = acc.find(item => item.productId === current.productId);
+            const x = acc.find(item => item.masterProductId === current.masterProductId);
             if (!x) {
               return acc.concat([current]);
             } else {
@@ -599,15 +603,9 @@ export class BomService {
           // Construct the response for each BOM
           return {
             bomId: bom.id,
-            masterProductId: bom.masterProductId,
-            warehouseId: bom.warehouseId,
-            masterProduct: {
-              id: masterProduct.id,
-              name: masterProduct.name,
-              code: masterProduct.code
-            },
+            warehouseId: bom.warehouse?.id,
             status: bom.status,
-            components: uniqueComponents,
+            bomComponents: uniqueComponents,
             createdAt: bom.createdAt,
             updatedAt: bom.updatedAt,
             deletedAt: bom.deletedAt
