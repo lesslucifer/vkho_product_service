@@ -391,6 +391,7 @@ export class BomService {
       const bom = await this.bomRepository
         .createQueryBuilder('bom')
         .leftJoinAndSelect('bom.bomComponents', 'bomComponents')
+        .leftJoinAndSelect('bom.warehouse', 'warehouse')
         .where('bom.id = :id', { id })
         .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
         .orderBy('bomComponents.id', 'ASC') // Order components by ID
