@@ -116,6 +116,11 @@ export class UpdateBomDto {
   @IsNotEmpty({ message: 'BOM ID is required' })
   id: number;
 
+  @ApiProperty({ description: 'BOM name' })
+  @IsString()
+  @IsNotEmpty({ message: 'BOM name is required' })
+  name: string;
+
   @ApiProperty({ 
     description: 'BOM status', 
     enum: BomStatus,

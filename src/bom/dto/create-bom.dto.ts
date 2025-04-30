@@ -48,6 +48,11 @@ export class CreateBomDto {
   @IsNotEmpty({ message: 'Warehouse ID is required' })
   warehouseId: number;
 
+  @ApiProperty({ description: 'BOM name' })
+  @IsString()
+  @IsNotEmpty({ message: 'BOM name is required' })
+  name: string;
+
   @ApiProperty({ 
     description: 'BOM status', 
     enum: BomStatus, 

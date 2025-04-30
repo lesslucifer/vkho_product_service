@@ -60,6 +60,7 @@ export class BomService {
 
       // Create and save the BOM
       const newBom = this.bomRepository.create({
+        name: createBomDto.name,
         warehouse: { id: createBomDto.warehouseId },
         status: createBomDto.status || BomStatus.ACTIVE
       });
@@ -141,6 +142,9 @@ export class BomService {
       }
 
       // Update BOM properties
+      if (updateBomDto.name) {
+        existingBom.name = updateBomDto.name;
+      }
       if (updateBomDto.status) {
         existingBom.status = updateBomDto.status;
       }

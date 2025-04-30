@@ -8,6 +8,9 @@ export class Bom {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name: string;
+
   @ManyToOne(() => Warehouse, { 
     onDelete: 'CASCADE',
     createForeignKeyConstraints: true
