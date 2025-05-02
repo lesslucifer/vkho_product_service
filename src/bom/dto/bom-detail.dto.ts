@@ -47,6 +47,9 @@ export class BomDetailDto {
   @ApiProperty({ description: 'BOM ID' })
   bomId: number;
 
+  @ApiProperty({ description: 'BOM name' })
+  name: string;
+
   @ApiProperty({ description: 'Warehouse ID' })
   warehouseId: number;
 

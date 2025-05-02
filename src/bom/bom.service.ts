@@ -364,6 +364,7 @@ export class BomService {
       // Construct the response
       return {
         bomId: bom.id,
+        name: bom.name,
         warehouseId: bom.warehouse?.id,
         status: bom.status,
         bomComponents: uniqueComponents,
@@ -443,6 +444,7 @@ export class BomService {
       // Construct the response
       return {
         bomId: bom.id,
+        name: bom.name,
         warehouseId: bom.warehouse?.id,
         status: bom.status,
         bomComponents: componentDetails,
@@ -608,6 +610,7 @@ export class BomService {
           // Construct the response for each BOM
           return {
             bomId: bom.id,
+            name: bom.name,
             warehouseId: bom.warehouse?.id,
             status: bom.status,
             bomComponents: uniqueComponents,
