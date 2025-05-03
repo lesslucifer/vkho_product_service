@@ -114,7 +114,7 @@ export class UpdateBomDto {
   @IsInt()
   @IsPositive()
   @IsNotEmpty({ message: 'BOM ID is required' })
-  id: number;
+  bomId: number;
 
   @ApiProperty({ description: 'BOM name' })
   @IsString()

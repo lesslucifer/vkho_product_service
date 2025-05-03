@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn, DeleteDateColumn } from 'typeorm';
 import { Bom } from '../../bom/entities/bom.entity';
 import { MasterProduct } from 'src/master-products/entities/master-product.entity';
 
@@ -20,7 +20,10 @@ export class BomComponent {
   @JoinColumn({ name: 'masterProductId' })
   masterProduct: MasterProduct;
 
-  @Column({ type: 'numeric', precision: 10, scale: 2 })
+  @Column({ type: 'numeric', precision: 10, scale: 2, transformer: { 
+    to: (value: number) => value,
+    from: (value: string) => parseFloat(value)
+  }})
   quantity: number;
 
   @Column({ length: 10 })
@@ -46,4 +49,7 @@ export class BomComponent {
 
   @UpdateDateColumn({ name: 'updatedAt' })
   updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deletedAt' })
+  deletedAt: Date;
 } 

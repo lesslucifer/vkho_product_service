@@ -86,10 +86,22 @@ export class BomService {
       }
 
       // Reload the BOM with its components
-      return await this.bomRepository.findOne({
+      const savedBomWithDetails = await this.bomRepository.findOne({
         where: { id: savedBom.id },
         relations: ['bomComponents', 'warehouse']
       });
+
+      // Transform the response to match the desired format
+      return {
+        bomId: savedBomWithDetails.id,
+        name: savedBomWithDetails.name,
+        status: savedBomWithDetails.status,
+        createdAt: savedBomWithDetails.createdAt,
+        updatedAt: savedBomWithDetails.updatedAt,
+        deletedAt: savedBomWithDetails.deletedAt,
+        bomComponents: savedBomWithDetails.bomComponents,
+        warehouse: savedBomWithDetails.warehouse
+      };
     } catch (error) {
       if (error instanceof QueryFailedError) {
         // Handle specific database constraint violations
@@ -112,7 +124,7 @@ export class BomService {
   }
 
   async update(updateBomDto: UpdateBomDto) {
-    this.logger.log(`Request to update BOM with ID: ${updateBomDto.id}`);
+    this.logger.log(`Request to update BOM with ID: ${updateBomDto.bomId}`);
     
     try {
       // Validate and transform status
@@ -129,14 +141,14 @@ export class BomService {
 
       // Find the existing BOM
       const existingBom = await this.bomRepository.findOne({
-        where: { id: updateBomDto.id },
+        where: { id: updateBomDto.bomId },
         relations: ['bomComponents', 'warehouse']
       });
 
       if (!existingBom) {
         throw new RpcException({
           status: 404,
-          message: `BOM with ID ${updateBomDto.id} not found`,
+          message: `BOM with ID ${updateBomDto.bomId} not found`,
           error: 'Not Found'
         });
       }
@@ -153,27 +165,49 @@ export class BomService {
       const updatedBom = await this.bomRepository.save(existingBom);
 
       // Handle components update
+      // Get IDs of components in the request (empty array if no components provided)
+      const requestComponentIds = updateBomDto.bomComponents
+        ?.filter(c => c.id) // Only include components that have an ID
+        .map(c => parseInt(c.id.toString())) || [];
+      
+      // Find components to delete (exist in DB but not in request)
+      const componentsToDelete = existingBom.bomComponents.filter(
+        c => !requestComponentIds.includes(c.id)
+      );
+      
+      // Delete components that are no longer in the request
+      if (componentsToDelete.length > 0) {
+        await Promise.all(
+          componentsToDelete.map(component => 
+            this.bomComponentRepository.softDelete(component.id)
+          )
+        );
+      }
+
+      // Update or create components if any are provided
       if (updateBomDto.bomComponents && updateBomDto.bomComponents.length > 0) {
         // Update or create components
         for (const componentDto of updateBomDto.bomComponents) {
-          const existingComponent = existingBom.bomComponents.find(
-            c => c.id === parseInt(componentDto.id.toString())
-          );
-
-          if (existingComponent) {
+          if (componentDto.id) {
             // Update existing component
-            existingComponent.masterProduct = { id: componentDto.masterProductId } as any;
-            existingComponent.quantity = parseFloat(componentDto.quantity.toString());
-            existingComponent.unit = componentDto.unit;
-            existingComponent.color = componentDto.color;
-            existingComponent.drawers = componentDto.drawers;
-            existingComponent.notes = componentDto.notes;
-            await this.bomComponentRepository.save(existingComponent);
+            const existingComponent = existingBom.bomComponents.find(
+              c => c.id === parseInt(componentDto.id.toString())
+            );
+
+            if (existingComponent) {
+              existingComponent.masterProduct = { id: componentDto.masterProductId } as any;
+              existingComponent.quantity = Number(componentDto.quantity);
+              existingComponent.unit = componentDto.unit;
+              existingComponent.color = componentDto.color;
+              existingComponent.drawers = componentDto.drawers;
+              existingComponent.notes = componentDto.notes;
+              await this.bomComponentRepository.save(existingComponent);
+            }
           } else {
             // Create new component if it doesn't exist
             const newComponent = this.bomComponentRepository.create({
               masterProduct: { id: componentDto.masterProductId },
-              quantity: parseFloat(componentDto.quantity.toString()),
+              quantity: Number(componentDto.quantity),
               unit: componentDto.unit,
               color: componentDto.color,
               drawers: componentDto.drawers,
@@ -186,10 +220,22 @@ export class BomService {
       }
 
       // Reload the BOM with its components and warehouse
-      return await this.bomRepository.findOne({
+      const updatedBomWithDetails = await this.bomRepository.findOne({
         where: { id: updatedBom.id },
         relations: ['bomComponents', 'warehouse']
       });
+
+      // Transform the response to match the desired format
+      return {
+        bomId: updatedBomWithDetails.id,
+        name: updatedBomWithDetails.name,
+        status: updatedBomWithDetails.status,
+        createdAt: updatedBomWithDetails.createdAt,
+        updatedAt: updatedBomWithDetails.updatedAt,
+        deletedAt: updatedBomWithDetails.deletedAt,
+        bomComponents: updatedBomWithDetails.bomComponents,
+        warehouse: updatedBomWithDetails.warehouse
+      };
     } catch (error) {
       if (error instanceof QueryFailedError) {
         // Handle specific database constraint violations
@@ -303,6 +349,7 @@ export class BomService {
         .leftJoinAndSelect('bom.warehouse', 'warehouse')
         .where('bom.masterProductId = :masterProductId', { masterProductId })
         .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
+        .andWhere('bomComponents.deletedAt IS NULL') // Exclude soft-deleted components
         .orderBy('bomComponents.id', 'ASC') // Order components by ID
         .getOne();
 
@@ -346,7 +393,8 @@ export class BomService {
               drawers: component.drawers || null,
               notes: component.notes || null,
               createdAt: component.createdAt,
-              updatedAt: component.updatedAt
+              updatedAt: component.updatedAt,
+              deletedAt: component.deletedAt
             } as BomComponentDetailDto;
           })
       );
@@ -395,6 +443,7 @@ export class BomService {
         .leftJoinAndSelect('bom.warehouse', 'warehouse')
         .where('bom.id = :id', { id })
         .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
+        .andWhere('bomComponents.deletedAt IS NULL') // Exclude soft-deleted components
         .orderBy('bomComponents.id', 'ASC') // Order components by ID
         .getOne();
 
@@ -436,7 +485,8 @@ export class BomService {
             drawers: component.drawers || null,
             notes: component.notes || null,
             createdAt: component.createdAt,
-            updatedAt: component.updatedAt
+            updatedAt: component.updatedAt,
+            deletedAt: component.deletedAt
           } as BomComponentDetailDto;
         })
       );
@@ -472,10 +522,17 @@ export class BomService {
       const skip = (page - 1) * limit;
       
       // Get total count
-      const total = await this.bomComponentRepository.count();
+      const total = await this.bomComponentRepository.count({
+        where: {
+          deletedAt: null
+        }
+      });
       
       // Get paginated components
       const components = await this.bomComponentRepository.find({
+        where: {
+          deletedAt: null
+        },
         order: {
           id: 'ASC'
         },
@@ -513,7 +570,8 @@ export class BomService {
             drawers: component.drawers || null,
             notes: component.notes || null,
             createdAt: component.createdAt,
-            updatedAt: component.updatedAt
+            updatedAt: component.updatedAt,
+            deletedAt: component.deletedAt
           } as BomComponentDetailDto;
         })
       );
@@ -545,6 +603,7 @@ export class BomService {
         .leftJoinAndSelect('bom.warehouse', 'warehouse')
         .where('bom.warehouseId = :warehouseId', { warehouseId })
         .andWhere('bom.deletedAt IS NULL') // Exclude soft-deleted BOMs
+        .andWhere('bomComponents.deletedAt IS NULL') // Exclude soft-deleted components
         .orderBy('bom.id', 'ASC') // Order BOMs by ID
         .addOrderBy('bomComponents.id', 'ASC') // Order components by ID
         .getMany();
@@ -592,7 +651,8 @@ export class BomService {
                   drawers: component.drawers || null,
                   notes: component.notes || null,
                   createdAt: component.createdAt,
-                  updatedAt: component.updatedAt
+                  updatedAt: component.updatedAt,
+                  deletedAt: component.deletedAt
                 } as BomComponentDetailDto;
               })
           );
