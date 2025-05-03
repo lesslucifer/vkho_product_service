@@ -41,6 +41,9 @@ export class BomComponentDetailDto {
 
   @ApiProperty({ description: 'Component last update date' })
   updatedAt: Date;
+
+  @ApiProperty({ description: 'Component deleted date', required: false })
+  deletedAt?: Date;
 }
 
 export class BomDetailDto {
