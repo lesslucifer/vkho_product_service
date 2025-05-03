@@ -399,6 +399,7 @@ export class MasterProductsService {
     // Validate string fields
     this.validator.validateStringFields(currentMasterProduct, [
       { field: 'name', message: 'Name cannot be empty', required: true },
+      { field: 'code', message: 'Code cannot be empty', required: true },
       { field: 'packing', message: 'Packing cannot be empty', required: true }
     ]);
 
@@ -412,6 +413,12 @@ export class MasterProductsService {
     // Validate enum fields
     this.validator.validateEnumFields(currentMasterProduct, [
       { field: 'method', enum: MasterProductMethod, message: 'Invalid method' }
+    ]);
+
+    // Validate date fields
+    this.validator.validateDateFields(currentMasterProduct, [
+      { field: 'createdAt', required: false },
+      { field: 'updatedAt', required: false }
     ]);
   }
 

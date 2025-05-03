@@ -1,7 +1,7 @@
 import { forwardRef, HttpException, HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
-import moment from 'moment';
+import * as moment from 'moment';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ResponseDTO } from 'src/common/response.dto';
 import { SUPPLIER_CODE_PATTERN } from 'src/constants/supplier.constants';
@@ -40,26 +40,33 @@ export class SuppliersService {
 
   async create(createSupplierDto: CreateSupplierDto) {
     this.logger.log(`Request to save Supplier: ${createSupplierDto.name}`);
-    //await this.checkNameSupplier(createSupplierDto.name, createSupplierDto.warehouseId);
-    const productCategoryIds = createSupplierDto.productCategoryIds;
+      this.validateInputs(createSupplierDto);
+      //await this.checkNameSupplier(createSupplierDto.name, createSupplierDto.warehouseId);
+      const productCategoryIds = createSupplierDto.productCategoryIds;
 
-    const productCategorys = [];
-    if (productCategoryIds) {
-      for (const id of productCategoryIds) {
-        let productCategory = await this.productCategorysService.findOne(id);
-        if (productCategory?.id) productCategorys.push(productCategory);
+      const productCategorys = [];
+      if (productCategoryIds) {
+        for (const id of productCategoryIds) {
+          let productCategory = await this.productCategorysService.findOne(id);
+          if (productCategory?.id) productCategorys.push(productCategory);
+        }
       }
-    }
 
-    createSupplierDto.productCategorys = [...productCategorys];
-    const newSupplier = await this.supplierRepository.create(createSupplierDto);
-    const res = await this.supplierRepository.save(newSupplier);
+      // Convert date string to Date object before creating entity
+      if (createSupplierDto.cooperationDay) {
+        const date = moment(createSupplierDto.cooperationDay, 'DD-MM-YYYY');
+        createSupplierDto.cooperationDay = date.toDate();
+      }
 
-    let sup = await this.supplierRepository.findOne(res.id);
-    sup.code = this.createSupplierCode(sup.id);
-    await this.supplierRepository.update(res.id, sup);
+      createSupplierDto.productCategorys = [...productCategorys];
+      const newSupplier = await this.supplierRepository.create(createSupplierDto);
+      const res = await this.supplierRepository.save(newSupplier);
 
-    return this.supplierRepository.findOne(sup.id, { relations: ['productCategorys'] });
+      let sup = await this.supplierRepository.findOne(res.id);
+      sup.code = this.createSupplierCode(sup.id);
+      await this.supplierRepository.update(res.id, sup);
+
+      return this.supplierRepository.findOne(sup.id, { relations: ['productCategorys'] });
   }
 
   createSupplierCode(id: number): string {
@@ -206,22 +213,55 @@ export class SuppliersService {
   }
 
   validateInputs(supplier) {
-
     if (supplier.email) {
       const res = this.validateEmail(supplier.email);
-      if (!res) throw new RpcException('Email incorrect!');
+      if (!res) throw new RpcException({
+        status: 400,
+        message: 'Email incorrect format!',
+        error: 'Bad Request'
+      });
     }
 
     if (supplier.phoneNumber) {
       const res = this.validatePhonenumber(supplier.phoneNumber);
-      if (!res) throw new RpcException('Phone number incorrect!');
+      if (!res) throw new RpcException({
+        status: 400,
+        message: 'Phone number incorrect format!',
+        error: 'Bad Request'
+      });
     }
 
     if (supplier.status) {
       if (!Object.values(SupplierStatus).includes(supplier.status))
-        throw new RpcException('Status incorrect!');
+        throw new RpcException({
+          status: 400,
+          message: 'Status incorrect!',
+          error: 'Bad Request'
+        });
     }
-    
+
+    if (supplier.cooperationDay) {
+      // First check if the date string matches the required format
+      const dateRegex = /^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[0-2])-\d{4}$/;
+      if (!dateRegex.test(supplier.cooperationDay)) {
+        throw new RpcException({
+          status: 400,
+          message: 'Invalid Date format. Please use DD-MM-YYYY format',
+          error: 'Bad Request'
+        });
+      }
+
+      // Then validate if it's a valid date
+      const date = moment(supplier.cooperationDay, 'DD-MM-YYYY');
+      if (!date.isValid()) {
+        throw new RpcException({
+          status: 400,
+          message: 'Invalid Date. Please provide a valid date in DD-MM-YYYY format',
+          error: 'Bad Request'
+        });
+      }
+      supplier.cooperationDay = date.toDate();
+    }
   }
 
   async checkNameSupplier(name: string, warehouseId: number) {
@@ -265,7 +305,7 @@ export class SuppliersService {
                   supplier.phoneNumber = data[3].toString();
 
                 if(data[4])
-                  supplier.cooperationDay = new Date(data[4].toString());
+                  supplier.cooperationDay = moment(data[4].toString()).format('DD-MM-YYYY');
 
                 if(data[5])
                   supplier.contractNumber = data[5].toString();
