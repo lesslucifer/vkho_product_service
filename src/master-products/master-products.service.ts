@@ -399,7 +399,6 @@ export class MasterProductsService {
     // Validate string fields
     this.validator.validateStringFields(currentMasterProduct, [
       { field: 'name', message: 'Name cannot be empty', required: true },
-      { field: 'code', message: 'Code cannot be empty', required: true },
       { field: 'packing', message: 'Packing cannot be empty', required: true }
     ]);
 
