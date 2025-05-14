@@ -15,7 +15,6 @@ export class MasterProductsController {
 
   @MessagePattern(MASTER_PRODUCT_PATTERN.MASTER_PRODUCT_CREATE)
   create(@Payload() createMasterProductDto: CreateMasterProductDto) {
-    console.log("go to here: " + JSON.stringify(createMasterProductDto));
     return this.masterProductsService.create(createMasterProductDto);
   }
 
