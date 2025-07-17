@@ -10,6 +10,11 @@ import { ResponseDTO } from 'src/common/response.dto';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { BomComponentDetailDto, BomDetailDto } from './dto/bom-detail.dto';
 import { PaginationBomComponentDto } from './dto/pagination-bom-component.dto';
+import { CraftFinishedProductDto } from './dto/craft-finished-product.dto';
+import { CreateCraftingDto } from './dto/create-crafting.dto';
+import { UpdateCraftingDto } from './dto/update-crafting.dto';
+import { UpsertCraftingDto } from './dto/upsert-crafting.dto';
+
 
 @Controller()
 export class BomController {
@@ -50,4 +55,20 @@ export class BomController {
   async getAllComponents(@Payload() pagination: PaginationBomComponentDto) {
     return this.bomService.getAllComponents(pagination.page, pagination.limit);
   }
+
+  @MessagePattern(BOM_PATTERN.CRAFTING_UPSERT)
+  async upsertCrafting(@Payload() upsertCraftingDto: UpsertCraftingDto) {
+    return this.bomService.upsertCrafting(upsertCraftingDto);
+  }
+
+  @MessagePattern(BOM_PATTERN.CRAFTING_GET_ONE)
+  async getCrafting(@Payload() id: number) {
+    return this.bomService.getCrafting(id);
+  }
+
+  @MessagePattern(BOM_PATTERN.CRAFTING_GET_ALL)
+  async getAllCrafting(@Payload() pagination: { page: number; limit: number }) {
+    return this.bomService.getAllCrafting(pagination.page, pagination.limit);
+  }
+
 }

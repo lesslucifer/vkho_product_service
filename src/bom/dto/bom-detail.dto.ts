@@ -46,6 +46,44 @@ export class BomComponentDetailDto {
   deletedAt?: Date;
 }
 
+export class BomFinishedProductDetailDto {
+  @ApiProperty({ description: 'Finished Product ID' })
+  id: number;
+
+  @ApiProperty({ description: 'BOM ID' })
+  bomId: number;
+
+  @ApiProperty({ description: 'Master Product ID' })
+  masterProductId: number;
+
+  @ApiProperty({ description: 'Product name' })
+  productName: string;
+
+  @ApiProperty({ description: 'Product code' })
+  productCode: string;
+
+  @ApiProperty({ description: 'Required quantity' })
+  quantity: number;
+
+  @ApiProperty({ description: 'Finished product color', required: false })
+  color?: string;
+
+  @ApiProperty({ description: 'Drawer information', required: false })
+  drawers?: string;
+
+  @ApiProperty({ description: 'Additional notes', required: false })
+  notes?: string;
+
+  @ApiProperty({ description: 'Finished product creation date' })
+  createdAt: Date;
+
+  @ApiProperty({ description: 'Finished product last update date' })
+  updatedAt: Date;
+
+  @ApiProperty({ description: 'Finished product deleted date', required: false })
+  deletedAt?: Date;
+}
+
 export class BomDetailDto {
   @ApiProperty({ description: 'BOM ID' })
   bomId: number;
@@ -61,6 +99,9 @@ export class BomDetailDto {
 
   @ApiProperty({ description: 'List of components with details', type: [BomComponentDetailDto] })
   bomComponents: BomComponentDetailDto[];
+
+  @ApiProperty({ description: 'Finished product details', type: BomFinishedProductDetailDto, required: false })
+  bomFinishedProduct?: BomFinishedProductDetailDto;
 
   @ApiProperty({ description: 'BOM creation date' })
   createdAt: Date;

@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn, OneToOne } from 'typeorm';
 import { BomComponent } from '../../bom-component/entities/bom-component.entity';
 import { BomStatus } from '../enum/bom-status.enum';
 import { Warehouse } from 'src/warehouse/entities/warehouse.entity';
+import { BomFinishedProduct } from '../../bom-finished-product/entities/bom-finished-product.entity';
 
 @Entity('bom')
 export class Bom {
@@ -23,6 +24,9 @@ export class Bom {
 
   @OneToMany(() => BomComponent, component => component.bom)
   bomComponents: BomComponent[];
+
+  @OneToOne(() => BomFinishedProduct, bomFinishedProduct => bomFinishedProduct.bom)
+  bomFinishedProduct: BomFinishedProduct;
 
   @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;

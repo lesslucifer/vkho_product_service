@@ -61,6 +61,59 @@ export class UpdateBomComponentDto {
   updatedAt: Date;
 }
 
+export class UpdateBomFinishedProductDto {
+  @ApiProperty({ description: 'Finished product ID' })
+  @IsNumber()
+  @IsInt()
+  @IsPositive()
+  @IsNotEmpty({ message: 'Finished product ID is required' })
+  id: number;
+
+  @ApiProperty({ description: 'BOM ID' })
+  @IsNumber()
+  @IsInt()
+  @IsPositive()
+  @IsNotEmpty({ message: 'BOM ID is required' })
+  bomId: number;
+
+  @ApiProperty({ description: 'Master product ID for finished product' })
+  @IsNumber()
+  @IsInt()
+  @IsPositive()
+  @IsNotEmpty({ message: 'Master product ID is required' })
+  masterProductId: number;
+
+  @ApiProperty({ description: 'Required quantity for finished product' })
+  @IsString()
+  @IsNotEmpty({ message: 'Finished product quantity is required' })
+  quantity: string;
+
+  @ApiProperty({ description: 'Color specification', required: false })
+  @IsString()
+  @IsOptional()
+  color?: string;
+
+  @ApiProperty({ description: 'Drawer location', required: false })
+  @IsString()
+  @IsOptional()
+  drawers?: string;
+
+  @ApiProperty({ description: 'Additional notes', required: false })
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
+  @ApiProperty({ description: 'Finished product creation date' })
+  @IsDate()
+  @IsNotEmpty({ message: 'Creation date is required' })
+  createdAt: Date;
+
+  @ApiProperty({ description: 'Finished product last update date' })
+  @IsDate()
+  @IsNotEmpty({ message: 'Update date is required' })
+  updatedAt: Date;
+}
+
 export class UpdateBomWarehouseDto {
   @ApiProperty({ description: 'Warehouse ID' })
   @IsNumber()
@@ -153,6 +206,12 @@ export class UpdateBomDto {
   @Type(() => UpdateBomComponentDto)
   @IsNotEmpty({ message: 'Components are required' })
   bomComponents: UpdateBomComponentDto[];
+
+  @ApiProperty({ description: 'Finished product details', type: UpdateBomFinishedProductDto, required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateBomFinishedProductDto)
+  bomFinishedProduct?: UpdateBomFinishedProductDto;
 
   @ApiProperty({ description: 'Warehouse details', type: UpdateBomWarehouseDto })
   @ValidateNested()
