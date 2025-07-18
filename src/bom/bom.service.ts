@@ -25,6 +25,8 @@ import { BomStatus } from './enum/bom-status.enum';
 import { ProductStatus } from 'src/product/enum/product-status.enum';
 import { CraftingStatus } from './enums/crafting-status.enum';
 import { UpsertCraftingDto } from './dto/upsert-crafting.dto';
+import { ReceiptsService } from 'src/receipts/receipts.service';
+import { CreateReceiptDto } from 'src/receipts/dto/create-receipt.dto';
 
 
 @Injectable()
@@ -57,6 +59,8 @@ export class BomService {
     private readonly replenishmentsService: ReplenishmentsService,
     @Inject(forwardRef(() => MasterProductsService))
     private readonly masterProductsService: MasterProductsService,
+    @Inject(forwardRef(() => ReceiptsService))
+    private readonly receiptsService: ReceiptsService,
     private configService: ConfigService,
     private httpService: HttpService,
   ) {}
@@ -941,156 +945,49 @@ export class BomService {
 
   async upsertCrafting(upsertCraftingDto: UpsertCraftingDto) {
     this.logger.log(`Request to upsert crafting: ${JSON.stringify(upsertCraftingDto)}`);
+    
     try {
-      // Validate status if provided (for both create and update)
-      if (upsertCraftingDto.status) {
-        const validStatuses = Object.values(CraftingStatus);
-        if (!validStatuses.includes(upsertCraftingDto.status)) {
-          throw new RpcException({
-            status: 400,
-            message: `Invalid status value. Must be one of: ${validStatuses.join(', ')}`,
-            error: 'Bad Request'
-          });
-        }
+      // Validate required fields for creating a new crafting record
+      if (!upsertCraftingDto.bomId || !upsertCraftingDto.quantity) {
+        throw new RpcException({
+          status: 400,
+          message: 'bomId and quantity are required for creating a crafting record',
+          error: 'Bad Request'
+        });
       }
 
-      if (upsertCraftingDto.id) {
-        // Update logic
-        const crafting = await this.craftingRepository.findOne({
-          where: { id: upsertCraftingDto.id },
-          relations: ['bom', 'bom.bomFinishedProduct', 'bom.warehouse']
+      // Check if status is NEW
+      if (upsertCraftingDto.status === CraftingStatus.NEW) {
+        // Create a new crafting record
+        const newCrafting = this.craftingRepository.create({
+          bomId: upsertCraftingDto.bomId,
+          quantity: upsertCraftingDto.quantity,
+          status: CraftingStatus.NEW,
+          notes: upsertCraftingDto.notes || null
         });
-        if (!crafting) {
-          throw new RpcException({
-            status: 404,
-            message: `Crafting record not found with ID: ${upsertCraftingDto.id}`,
-            error: 'Not Found'
-          });
-        }
-        
-        const previousStatus = crafting.status;
-        const newStatus = upsertCraftingDto.status || crafting.status;
-        
-        // Validate component stock if status is being set to NEW or CRAFTING
-        if (newStatus === CraftingStatus.NEW || newStatus === CraftingStatus.CRAFTING) {
-          // Get BOM with components for validation
-          const bom = await this.bomRepository.findOne({
-            where: { id: crafting.bomId },
-            relations: ['bomComponents', 'warehouse']
-          });
-          
-          if (!bom) {
-            throw new RpcException({
-              status: 404,
-              message: `BOM not found with ID: ${crafting.bomId}`,
-              error: 'Not Found'
-            });
-          }
-          
-          // Get all active crafting records for this BOM (excluding the current one)
-          const activeCraftings = await this.craftingRepository.find({
-            where: {
-              bomId: crafting.bomId,
-              status: In([CraftingStatus.NEW, CraftingStatus.CRAFTING]),
-              id: Not(crafting.id)
-            }
-          });
-          
-          // Use the new quantity (from the request) for validation
-          const newQuantity = upsertCraftingDto.quantity ?? crafting.quantity;
-          // Calculate total quantity being crafted
-          const totalCraftingQuantity = activeCraftings.reduce((sum, c) => sum + c.quantity, 0) + newQuantity;
-          this.logger.log(`Debug - Total crafting quantity: ${totalCraftingQuantity}, Current crafting quantity: ${crafting.quantity}, Active craftings: ${activeCraftings.length}`);
-          
-          // Check if we have enough components for the total crafting quantity
-          const componentValidationResults = await Promise.all(
-            bom.bomComponents.map(async (component) => {
-              // Get current stock for this component
-              const stockResult = await this.productService.getOnHandProductId(
-                component.masterProductId,
-                bom.warehouse.id
-              );
-              
-              // Get master product details
-              let masterProduct;
-              try {
-                masterProduct = await this.masterProductsService.findOne(component.masterProductId);
-              } catch (error) {
-                this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
-                masterProduct = {
-                  id: component.masterProductId,
-                  name: 'Unknown Product',
-                  code: 'UNKNOWN',
-                  availableQuantity: 0,
-                  status: null
-                };
-              }
-              
-              const currentStock = parseFloat(stockResult?.value || '0');
-              const requiredQuantity = component.quantity * totalCraftingQuantity;
-              
-              return {
-                componentId: component.id,
-                masterProductId: component.masterProductId,
-                componentName: masterProduct.name,
-                componentCode: masterProduct.code,
-                requiredQuantity,
-                currentStock,
-                hasEnoughStock: currentStock >= requiredQuantity,
-                unit: component.unit,
-                totalCraftingQuantity
-              };
-            })
-          );
-          
-          // Check if all components have enough stock
-          const insufficientComponents = componentValidationResults.filter(result => !result.hasEnoughStock);
-          if (insufficientComponents.length > 0) {
-            const insufficientDetails = insufficientComponents.map(comp =>
-              `Required ${comp.requiredQuantity} ${comp.unit} ${comp.componentName}, Available ${comp.currentStock} ${comp.unit}`
-            ).join(', ');
-            throw new RpcException({
-              status: 400,
-              message: `Insufficient stock for crafting. ${insufficientDetails}`,
-              error: 'Bad Request'
-            });
-          }
-        }
-        
-        // Update the crafting record
-        if (upsertCraftingDto.status) crafting.status = newStatus;
-        if (upsertCraftingDto.notes) crafting.notes = upsertCraftingDto.notes;
-        if (upsertCraftingDto.quantity) crafting.quantity = upsertCraftingDto.quantity;
-        await this.craftingRepository.save(crafting);
-        
-        if (previousStatus === CraftingStatus.CRAFTING && newStatus === CraftingStatus.DONE) {
-          await this.completeCrafting(crafting);
-        }
-        
+
+        const savedCrafting = await this.craftingRepository.save(newCrafting);
+
         return {
           success: true,
-          message: `Crafting record updated successfully`,
-          craftingId: crafting.id,
-          bomId: crafting.bomId,
-          quantity: crafting.quantity,
-          previousStatus,
-          newStatus: crafting.status,
-          updatedAt: crafting.updatedAt
+          message: 'Crafting record created successfully',
+          craftingId: savedCrafting.id,
+          bomId: savedCrafting.bomId,
+          quantity: savedCrafting.quantity,
+          status: savedCrafting.status,
+          notes: savedCrafting.notes,
+          createdAt: savedCrafting.createdAt
         };
-      } else {
-        // Create logic
-        if (!upsertCraftingDto.bomId || !upsertCraftingDto.quantity) {
-          throw new RpcException({
-            status: 400,
-            message: 'bomId and quantity are required for creating a crafting record',
-            error: 'Bad Request'
-          });
-        }
-        // Get BOM with components and finished product
+      }
+
+      // Check if status is DONE
+      if (upsertCraftingDto.status === CraftingStatus.DONE) {
+        // Get BOM with components and warehouse
         const bom = await this.bomRepository.findOne({
           where: { id: upsertCraftingDto.bomId },
-          relations: ['bomComponents', 'bomFinishedProduct', 'warehouse']
+          relations: ['bomComponents', 'warehouse']
         });
+
         if (!bom) {
           throw new RpcException({
             status: 404,
@@ -1098,106 +995,125 @@ export class BomService {
             error: 'Not Found'
           });
         }
-        if (!bom.bomFinishedProduct) {
-          throw new RpcException({
-            status: 400,
-            message: `BOM does not have a finished product configured`,
-            error: 'Bad Request'
-          });
-        }
-        
-        // Validate component stock if status is NEW or CRAFTING
-        const newStatus = upsertCraftingDto.status || CraftingStatus.NEW;
-        if (newStatus === CraftingStatus.NEW || newStatus === CraftingStatus.CRAFTING) {
-          // Get all active crafting records for this BOM
-          const activeCraftings = await this.craftingRepository.find({
-            where: {
-              bomId: upsertCraftingDto.bomId,
-              status: In([CraftingStatus.NEW, CraftingStatus.CRAFTING])
-            }
-          });
-          // Calculate total quantity being crafted (including the new request)
-          const totalCraftingQuantity = activeCraftings.reduce((sum, crafting) => sum + crafting.quantity, 0) + upsertCraftingDto.quantity;
-          this.logger.log(`Debug - Create: Active craftings count: ${activeCraftings.length}, Total quantity: ${totalCraftingQuantity}, New request quantity: ${upsertCraftingDto.quantity}`);
-          if (activeCraftings.length > 0) {
-            this.logger.log(`Debug - Active crafting IDs: ${activeCraftings.map(c => c.id).join(', ')}`);
-          }
-          // Check if we have enough components for the total crafting quantity
-          const componentValidationResults = await Promise.all(
-            bom.bomComponents.map(async (component) => {
-              // Get current stock for this component
-              const stockResult = await this.productService.getOnHandProductId(
-                component.masterProductId,
-                bom.warehouse.id
-              );
-              // Get master product details
-              let masterProduct;
-              try {
-                masterProduct = await this.masterProductsService.findOne(component.masterProductId);
-              } catch (error) {
-                this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
-                masterProduct = {
-                  id: component.masterProductId,
-                  name: 'Unknown Product',
-                  code: 'UNKNOWN',
-                  availableQuantity: 0,
-                  status: null
-                };
-              }
-              const currentStock = parseFloat(stockResult?.value || '0');
-              const requiredQuantity = component.quantity * totalCraftingQuantity;
-              return {
-                componentId: component.id,
-                masterProductId: component.masterProductId,
-                componentName: masterProduct.name,
-                componentCode: masterProduct.code,
-                requiredQuantity,
-                currentStock,
-                hasEnoughStock: currentStock >= requiredQuantity,
-                unit: component.unit,
-                totalCraftingQuantity
+
+        // Create list of CreateProductDto for each BOM component
+        const createProductDtos = await Promise.all(
+          bom.bomComponents.map(async (component) => {
+            // Get master product details
+            let masterProduct;
+            try {
+              masterProduct = await this.masterProductsService.findOne(component.masterProductId);
+            } catch (error) {
+              this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
+              masterProduct = {
+                id: component.masterProductId,
+                name: 'Unknown Product',
+                code: 'UNKNOWN',
+                availableQuantity: 0,
+                status: null
               };
-            })
-          );
-          // Check if all components have enough stock
-          const insufficientComponents = componentValidationResults.filter(result => !result.hasEnoughStock);
-          if (insufficientComponents.length > 0) {
-            const insufficientDetails = insufficientComponents.map(comp =>
-              `Required ${comp.requiredQuantity} ${comp.unit} ${comp.componentName}, Available ${comp.currentStock} ${comp.unit}`
-            ).join(', ');
-            throw new RpcException({
-              status: 400,
-              message: `Insufficient stock for crafting. ${insufficientDetails}`,
-              error: 'Bad Request'
-            });
-          }
-        }
-        
-        // All components have enough stock, create the crafting record
+            }
+
+            // Calculate quantity for this component based on BOM quantity
+            const componentQuantity = component.quantity * upsertCraftingDto.quantity;
+
+            // Create CreateProductDto for this component
+            const createProductDto: any = {
+              name: masterProduct.name,
+              totalQuantity: componentQuantity,
+              expectedQuantity: componentQuantity,
+              cost: 0, // Default value, should be set based on business logic
+              salePrice: 0, // Default value, should be set based on business logic
+              warehouseId: bom.warehouse.id,
+              inboundKind: 'CRAFTING', // Indicates this product was created through crafting
+              expireDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default 1 year from now
+              storageDate: new Date(),
+              productCode: masterProduct.code,
+              idRackReallocate: 0, // Default value
+              imageProduct: '', // Default empty
+              imageQRCode: '', // Default empty
+              imageBarcode: '', // Default empty
+              code: `${masterProduct.code}_CRAFTED_${Date.now()}`, // Generate unique code
+              note: `Created from crafting BOM ${bom.id}`,
+              barCode: '', // Default empty
+              blockId: 0, // Default value
+              rackId: 0, // Default value
+              rackCode: '', // Default empty
+              receiptId: 0, // Default value
+              supplierId: 0, // Default value
+              zoneId: 0, // Default value
+              orderId: 0, // Default value
+              packageId: 0, // Default value
+              masterProductId: component.masterProductId,
+              productCategoryId: 0, // Default value
+              status1: 'ACTIVE' // Default status
+            };
+
+            return createProductDto;
+          })
+        );
+
+        // Create a new crafting record with DONE status
         const newCrafting = this.craftingRepository.create({
           bomId: upsertCraftingDto.bomId,
           quantity: upsertCraftingDto.quantity,
-          status: upsertCraftingDto.status || CraftingStatus.NEW,
-          notes: upsertCraftingDto.notes
+          status: CraftingStatus.DONE,
+          notes: upsertCraftingDto.notes || null
         });
+
         const savedCrafting = await this.craftingRepository.save(newCrafting);
+
+        // Create CreateReceiptDto from the list of CreateProductDto
+        const createReceiptDto: CreateReceiptDto = {
+          creatorId: 'SYSTEM', // Default system creator
+          creatorName: 'System Crafting', // Default system creator name
+          driverName: 'System', // Default driver name
+          boothCode: `CRAFT_${bom.id}`, // Generate booth code from BOM ID
+          receiptDate: new Date(), // Current date
+          description: `Receipt created from crafting BOM ${bom.id} - ${bom.name}`, // Description with BOM details
+          warehouseId: bom.warehouse.id, // Use BOM warehouse
+          supplierId: 0, // Default supplier ID (no supplier for crafting)
+          products: createProductDtos // Use the list of CreateProductDto
+        };
+
+        // Save the receipt to database
+        const savedReceipt = await this.receiptsService.create(createReceiptDto);
+
         return {
           success: true,
-          message: `Crafting record created successfully`,
+          message: 'Crafting record created successfully with DONE status and receipt saved',
           craftingId: savedCrafting.id,
           bomId: savedCrafting.bomId,
           quantity: savedCrafting.quantity,
           status: savedCrafting.status,
-          createdAt: savedCrafting.createdAt
+          notes: savedCrafting.notes,
+          createdAt: savedCrafting.createdAt,
+          createProductDtos: createProductDtos, // Return the list of CreateProductDto
+          receipt: {
+            id: savedReceipt.id,
+            code: savedReceipt.code,
+            description: savedReceipt.description,
+            receiptDate: savedReceipt.receiptDate,
+            warehouseId: savedReceipt.warehouseId,
+            productsCount: savedReceipt.products?.length || 0
+          }
         };
       }
+
+      // For other statuses, handle accordingly
+      throw new RpcException({
+        status: 400,
+        message: 'Only NEW and DONE statuses are currently supported for creating crafting records',
+        error: 'Bad Request'
+      });
+
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
       }
       throw new RpcException({
         status: 500,
-        message: error.message || 'An error occurred while upserting crafting record',
+        message: error.message || 'An error occurred while creating crafting record',
         error: 'Internal Server Error'
       });
     }

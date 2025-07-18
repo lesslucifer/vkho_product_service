@@ -14,7 +14,7 @@ import { ZoneModule } from 'src/zone/zone.module';
   forwardRef(() => SuppliersModule),
   forwardRef(() => ZoneModule)
 ],
-  exports: [TypeOrmModule, ReceiptsService],
+  exports: [ReceiptsService],
   controllers: [ReceiptsController],
   providers: [ReceiptsService]
 })

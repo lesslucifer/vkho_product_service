@@ -13,6 +13,7 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
 import { ProductCategorysModule } from '../product-categorys/product-categorys.module';
 import { ReplenishmentsModule } from '../replenishments/replenishments.module';
 import { MasterProductsModule } from '../master-products/master-products.module';
+import { ReceiptsModule } from '../receipts/receipts.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { MasterProductsModule } from '../master-products/master-products.module'
     forwardRef(() => SuppliersModule),
     forwardRef(() => ProductCategorysModule),
     forwardRef(() => ReplenishmentsModule),
-    forwardRef(() => MasterProductsModule)
+    forwardRef(() => MasterProductsModule),
+    forwardRef(() => ReceiptsModule)
   ],
   controllers: [BomController],
   providers: [BomService],
