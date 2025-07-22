@@ -982,10 +982,10 @@ export class BomService {
 
       // Check if status is DONE
       if (upsertCraftingDto.status === CraftingStatus.DONE) {
-        // Get BOM with components and warehouse
+        // Get BOM with finished product and warehouse
         const bom = await this.bomRepository.findOne({
           where: { id: upsertCraftingDto.bomId },
-          relations: ['bomComponents', 'warehouse']
+          relations: ['bomFinishedProduct', 'warehouse']
         });
 
         if (!bom) {
@@ -996,62 +996,63 @@ export class BomService {
           });
         }
 
-        // Create list of CreateProductDto for each BOM component
-        const createProductDtos = await Promise.all(
-          bom.bomComponents.map(async (component) => {
-            // Get master product details
-            let masterProduct;
-            try {
-              masterProduct = await this.masterProductsService.findOne(component.masterProductId);
-            } catch (error) {
-              this.logger.warn(`Master product not found with ID: ${component.masterProductId}`);
-              masterProduct = {
-                id: component.masterProductId,
-                name: 'Unknown Product',
-                code: 'UNKNOWN',
-                availableQuantity: 0,
-                status: null
-              };
-            }
+        if (!bom.bomFinishedProduct) {
+          throw new RpcException({
+            status: 400,
+            message: `BOM does not have a finished product configured`,
+            error: 'Bad Request'
+          });
+        }
 
-            // Calculate quantity for this component based on BOM quantity
-            const componentQuantity = component.quantity * upsertCraftingDto.quantity;
+        // Get master product details of the finished product
+        let masterProduct;
+        try {
+          masterProduct = await this.masterProductsService.findOne(bom.bomFinishedProduct.masterProductId);
+        } catch (error) {
+          this.logger.warn(`Master product not found with ID: ${bom.bomFinishedProduct.masterProductId}`);
+          masterProduct = {
+            id: bom.bomFinishedProduct.masterProductId,
+            name: 'Unknown Product',
+            code: 'UNKNOWN',
+            availableQuantity: 0,
+            status: null
+          };
+        }
 
-            // Create CreateProductDto for this component
-            const createProductDto: any = {
-              name: masterProduct.name,
-              totalQuantity: componentQuantity,
-              expectedQuantity: componentQuantity,
-              cost: 0, // Default value, should be set based on business logic
-              salePrice: 0, // Default value, should be set based on business logic
-              warehouseId: bom.warehouse.id,
-              inboundKind: 'CRAFTING', // Indicates this product was created through crafting
-              expireDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default 1 year from now
-              storageDate: new Date(),
-              productCode: masterProduct.code,
-              idRackReallocate: 0, // Default value
-              imageProduct: '', // Default empty
-              imageQRCode: '', // Default empty
-              imageBarcode: '', // Default empty
-              code: `${masterProduct.code}_CRAFTED_${Date.now()}`, // Generate unique code
-              note: `Created from crafting BOM ${bom.id}`,
-              barCode: '', // Default empty
-              blockId: 0, // Default value
-              rackId: 0, // Default value
-              rackCode: '', // Default empty
-              receiptId: 0, // Default value
-              supplierId: 0, // Default value
-              zoneId: 0, // Default value
-              orderId: 0, // Default value
-              packageId: 0, // Default value
-              masterProductId: component.masterProductId,
-              productCategoryId: 0, // Default value
-              status1: 'ACTIVE' // Default status
-            };
+        // Calculate quantity for the finished product based on BOM finished product quantity and crafting quantity
+        const finishedProductQuantity = bom.bomFinishedProduct.quantity * upsertCraftingDto.quantity;
 
-            return createProductDto;
-          })
-        );
+        // Create CreateProductDto for the finished product
+        const createProductDto: any = {
+          name: masterProduct.name,
+          totalQuantity: finishedProductQuantity,
+          expectedQuantity: finishedProductQuantity,
+          cost: 0, // Default value, should be set based on business logic
+          salePrice: 0, // Default value, should be set based on business logic
+          warehouseId: bom.warehouse.id,
+          inboundKind: 'CRAFTING', // Indicates this product was created through crafting
+          expireDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default 1 year from now
+          storageDate: new Date(),
+          productCode: masterProduct.code,
+          idRackReallocate: 0, // Default value
+          imageProduct: '', // Default empty
+          imageQRCode: '', // Default empty
+          imageBarcode: '', // Default empty
+          code: `${masterProduct.code}_CRAFTED_${Date.now()}`, // Generate unique code
+          note: `Created from crafting BOM ${bom.id} - Finished Product`,
+          barCode: '', // Default empty
+          blockId: 0, // Default value
+          rackId: 0, // Default value
+          rackCode: '', // Default empty
+          receiptId: 0, // Default value
+          supplierId: 0, // Default value
+          zoneId: 0, // Default value
+          orderId: 0, // Default value
+          packageId: 0, // Default value
+          masterProductId: bom.bomFinishedProduct.masterProductId,
+          productCategoryId: 0, // Default value
+          status1: 'ACTIVE' // Default status
+        };
 
         // Create a new crafting record with DONE status
         const newCrafting = this.craftingRepository.create({
@@ -1063,7 +1064,7 @@ export class BomService {
 
         const savedCrafting = await this.craftingRepository.save(newCrafting);
 
-        // Create CreateReceiptDto from the list of CreateProductDto
+        // Create CreateReceiptDto from the CreateProductDto
         const createReceiptDto: CreateReceiptDto = {
           creatorId: 'SYSTEM', // Default system creator
           creatorName: 'System Crafting', // Default system creator name
@@ -1073,7 +1074,7 @@ export class BomService {
           description: `Receipt created from crafting BOM ${bom.id} - ${bom.name}`, // Description with BOM details
           warehouseId: bom.warehouse.id, // Use BOM warehouse
           supplierId: 0, // Default supplier ID (no supplier for crafting)
-          products: createProductDtos // Use the list of CreateProductDto
+          products: [createProductDto] // Use array with single CreateProductDto
         };
 
         // Save the receipt to database
@@ -1088,7 +1089,7 @@ export class BomService {
           status: savedCrafting.status,
           notes: savedCrafting.notes,
           createdAt: savedCrafting.createdAt,
-          createProductDtos: createProductDtos, // Return the list of CreateProductDto
+          createProductDto: createProductDto, // Return the CreateProductDto
           receipt: {
             id: savedReceipt.id,
             code: savedReceipt.code,
