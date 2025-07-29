@@ -119,16 +119,19 @@ export class ShelfService {
                   master.medium = parseInt(data[3].toString());
 
                 if (data[4])
-                  master.high = parseInt(data[4].toString());
+                  master.medium = parseInt(data[3].toString());
 
                 if (data[5])
-                  master.capacity = parseInt(data[5].toString());
+                  master.high = parseInt(data[4].toString());
 
                 if (data[6])
-                  master.blockId = parseInt(data[6].toString());
+                  master.capacity = parseInt(data[5].toString());
 
                 if (data[7])
-                  master.parentProductCategoryId = parseInt(data[7].toString());
+                  master.blockId = parseInt(data[6].toString());
+
+                if (data[8])
+                  master.parentProductCategoryId = parseInt(data[8].toString());
 
                 master.warehouseId = dataExcel.warehouseId;
                 const masterItem = await this.create(master);

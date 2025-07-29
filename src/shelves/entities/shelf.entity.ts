@@ -32,6 +32,11 @@ export class Shelf {
     @Column({
         nullable: true,
     })
+    available: number;
+
+    @Column({
+        nullable: true,
+    })
     medium: number;
 
     @Column({
