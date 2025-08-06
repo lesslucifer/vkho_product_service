@@ -67,8 +67,8 @@ export class BomController {
   }
 
   @MessagePattern(BOM_PATTERN.CRAFTING_GET_ALL)
-  async getAllCrafting(@Payload() pagination: { page: number; limit: number }) {
-    return this.bomService.getAllCrafting(pagination.page, pagination.limit);
+  async getAllCrafting(@Payload() pagination: { page: number; limit: number; warehouseId: number }) {
+    return this.bomService.getAllCrafting(pagination.page, pagination.limit, pagination.warehouseId);
   }
 
 }

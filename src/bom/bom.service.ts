@@ -63,11 +63,11 @@ export class BomService {
     private readonly receiptsService: ReceiptsService,
     private configService: ConfigService,
     private httpService: HttpService,
-  ) {}
+  ) { }
 
   async create(createBomDto: CreateBomDto) {
     this.logger.log(`Request to save BOM`);
-    
+
     try {
       // Validate and transform status
       if (createBomDto.status) {
@@ -195,7 +195,7 @@ export class BomService {
 
   async update(updateBomDto: UpdateBomDto) {
     this.logger.log(`Request to update BOM with ID: ${updateBomDto.bomId}`);
-    
+
     try {
       // Validate and transform status
       if (updateBomDto.status) {
@@ -239,16 +239,16 @@ export class BomService {
       const requestComponentIds = updateBomDto.bomComponents
         ?.filter(c => c.id) // Only include components that have an ID
         .map(c => parseInt(c.id.toString())) || [];
-      
+
       // Find components to delete (exist in DB but not in request)
       const componentsToDelete = existingBom.bomComponents.filter(
         c => !requestComponentIds.includes(c.id)
       );
-      
+
       // Delete components that are no longer in the request
       if (componentsToDelete.length > 0) {
         await Promise.all(
-          componentsToDelete.map(component => 
+          componentsToDelete.map(component =>
             this.bomComponentRepository.softDelete(component.id)
           )
         );
@@ -386,7 +386,7 @@ export class BomService {
 
   async remove(id: number) {
     this.logger.log(`Request to soft delete BOM with ID: ${id}`);
-    
+
     try {
       // Find the BOM with its components, finished product, and warehouse
       const bom = await this.bomRepository.findOne({
@@ -405,7 +405,7 @@ export class BomService {
       // Soft delete the BOM components first
       if (bom.bomComponents && bom.bomComponents.length > 0) {
         await Promise.all(
-          bom.bomComponents.map(component => 
+          bom.bomComponents.map(component =>
             this.bomComponentRepository.softDelete(component.id)
           )
         );
@@ -484,7 +484,7 @@ export class BomService {
 
   async getByMasterProductId(masterProductId: number): Promise<BomDetailDto> {
     this.logger.log(`Request to get BOM for master product ID: ${masterProductId}`);
-    
+
     try {
       // Find the BOM with its components, warehouse, and finished product
       const bom = await this.bomRepository
@@ -613,7 +613,7 @@ export class BomService {
 
   async getOne(id: number): Promise<BomDetailDto> {
     this.logger.log(`Request to get BOM with ID: ${id}`);
-    
+
     try {
       // Find the BOM with its components and finished product
       const bom = await this.bomRepository
@@ -730,18 +730,18 @@ export class BomService {
 
   async getAllComponents(page: number = 1, limit: number = 10): Promise<ResponseDTO> {
     this.logger.log(`Request to get all BOM components with pagination - page: ${page}, limit: ${limit}`);
-    
+
     try {
       // Calculate skip and take
       const skip = (page - 1) * limit;
-      
+
       // Get total count
       const total = await this.bomComponentRepository.count({
         where: {
           deletedAt: null
         }
       });
-      
+
       // Get paginated components
       const components = await this.bomComponentRepository.find({
         where: {
@@ -808,7 +808,7 @@ export class BomService {
 
   async getByWarehouseId(warehouseId: number): Promise<BomDetailDto[]> {
     this.logger.log(`Request to get BOMs for warehouse ID: ${warehouseId}`);
-    
+
     try {
       // Find all BOMs with their components, warehouse, and finished products for the given warehouse
       const boms = await this.bomRepository
@@ -945,7 +945,7 @@ export class BomService {
 
   async upsertCrafting(upsertCraftingDto: UpsertCraftingDto) {
     this.logger.log(`Request to upsert crafting: ${JSON.stringify(upsertCraftingDto)}`);
-    
+
     try {
       // Validate required fields for creating a new crafting record
       if (!upsertCraftingDto.bomId || !upsertCraftingDto.quantity) {
@@ -1122,7 +1122,7 @@ export class BomService {
 
   private async completeCrafting(crafting: Crafting) {
     this.logger.log(`Completing crafting ID: ${crafting.id} and increasing finished product quantity`);
-    
+
     try {
       // Update the finished product quantity
       const currentFinishedProduct = await this.bomFinishedProductRepository.findOne({
@@ -1156,7 +1156,7 @@ export class BomService {
 
   async getCrafting(id: number) {
     this.logger.log(`Request to get crafting ID: ${id}`);
-    
+
     try {
       const crafting = await this.craftingRepository.findOne({
         where: { id },
@@ -1203,14 +1203,21 @@ export class BomService {
     }
   }
 
-  async getAllCrafting(page: number = 1, limit: number = 10) {
-    this.logger.log(`Request to get all crafting records with pagination: page=${page}, limit=${limit}`);
-    
+  async getAllCrafting(page: number = 1, limit: number = 10, warehouseId: number) {
+    this.logger.log(`Request to get all crafting records with pagination: page=${page}, limit=${limit}, warehouseId=${warehouseId}`);
+
     try {
       const skip = (page - 1) * limit;
 
       const [craftings, total] = await this.craftingRepository.findAndCount({
         relations: ['bom', 'bom.bomFinishedProduct', 'bom.warehouse'],
+        where: {
+          bom: {
+            warehouse: {
+              id: warehouseId
+            }
+          }
+        },
         order: {
           createdAt: 'DESC'
         },
