@@ -937,6 +937,26 @@ export class ProductService {
     this.readExcel(createDivisonDto);
   }
 
+  async getProductsByStatus(status: ProductStatus, warehouseId?: number): Promise<Product[]> {
+    this.logger.log(`Request to get products by status: ${status}`);
+    
+    const queryBuilder = this.productRepository.createQueryBuilder('product')
+      .leftJoinAndSelect('product.masterProduct', 'masterProduct')
+      .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
+      .leftJoinAndSelect('product.rack', 'rack')
+      .leftJoinAndSelect('product.block', 'block')
+      .leftJoinAndSelect('product.zone', 'zone')
+      .leftJoinAndSelect('product.supplier', 'supplier')
+      .leftJoinAndSelect('product.receipt', 'receipt')
+      .where('product.status = :status', { status });
+
+    if (warehouseId) {
+      queryBuilder.andWhere('product.warehouseId = :warehouseId', { warehouseId });
+    }
+
+    return queryBuilder.getMany();
+  }
+
   async readExcel(dataExcel: BufferedFile) {
     const res = [];
     const filename = __dirname + dataExcel.fieldname + "-" + Date.now() + "-" + dataExcel.originalname;
