@@ -25,3 +25,8 @@ export class ProductFilter extends PaginationDto {
   endExpireDate: Date;
   group: string;
 }
+
+export class GetProductsByStatusDto {
+  status: ProductStatus;
+  warehouseId?: number;
+}

@@ -16,6 +16,7 @@ import { ProductScanResponse } from './dto/response-product.dto';
 import { ResponseDTO } from 'src/common/response.dto';
 import { RecommendProduct } from './dto/recommend-product.dto';
 import { BufferedFile } from 'src/common/buffered-file.dto';
+import { GetProductsByStatusDto } from './dto/filter-product.dto';
 
 @Controller()
 export class ProductController {
@@ -87,6 +88,11 @@ export class ProductController {
   @MessagePattern(PRODUCT_PATTERN.PRODUCT_GET_ONE)
   findOne(@Payload() id: number): Promise<Product> {
     return this.productService.findOne(id);
+  }
+
+  @MessagePattern(PRODUCT_PATTERN.PRODUCT_GET_BY_STATUS)
+  async getProductsByStatus(@Payload() payload: GetProductsByStatusDto): Promise<Product[]> {
+    return this.productService.getProductsByStatus(payload.status as any, payload.warehouseId);
   }
 
   @MessagePattern(PRODUCT_PATTERN.PRODUCT_UPDATE)

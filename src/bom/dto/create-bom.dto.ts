@@ -40,6 +40,38 @@ export class CreateBomComponentDto {
   notes?: string;
 }
 
+export class CreateBomFinishedProductDto {
+  @ApiProperty({ description: 'Master product ID for finished product' })
+  @IsNumber()
+  @IsInt()
+  @IsPositive()
+  @IsNotEmpty({ message: 'Master product ID is required' })
+  masterProductId: number;
+
+  @ApiProperty({ description: 'Required quantity for finished product' })
+  @IsNumber()
+  @IsInt()
+  @IsPositive()
+  @Min(1, { message: 'Finished product quantity must be greater than 0' })
+  @IsNotEmpty({ message: 'Finished product quantity is required' })
+  quantity: number;
+
+  @ApiProperty({ description: 'Color specification', required: false })
+  @IsString()
+  @IsOptional()
+  color?: string;
+
+  @ApiProperty({ description: 'Drawer location', required: false })
+  @IsString()
+  @IsOptional()
+  drawers?: string;
+
+  @ApiProperty({ description: 'Additional notes', required: false })
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
 export class CreateBomDto {
   @ApiProperty({ description: 'Warehouse ID' })
   @IsNumber()
@@ -71,4 +103,10 @@ export class CreateBomDto {
   @ValidateNested({ each: true })
   @Type(() => CreateBomComponentDto)
   bomComponents: CreateBomComponentDto[];
+
+  @ApiProperty({ description: 'Finished product details', type: CreateBomFinishedProductDto, required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateBomFinishedProductDto)
+  bomFinishedProduct?: CreateBomFinishedProductDto;
 } 

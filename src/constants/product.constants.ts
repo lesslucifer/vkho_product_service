@@ -5,6 +5,7 @@ export const PRODUCT_PATTERN = {
   PRODUCT_GET_ALL: 'product_get_all',
   PRODUCT_GET_INVENTORY: 'product_get_inventory',
   PRODUCT_GET_ONE: 'product_get_one',
+  PRODUCT_GET_BY_STATUS: 'product_get_by_status',
   PRODUCT_UPDATE: 'product_update',
   PRODUCT_DELETE: 'product_delete',
   PRODUCT_DELETES: 'product_deletes',
