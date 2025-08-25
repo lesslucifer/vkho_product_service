@@ -217,7 +217,7 @@ export class BomService {
 
       if (!existingBom) {
         throw new RpcException({
-          status: 404,
+          status: 400,
           message: `BOM with ID ${updateBomDto.bomId} not found`,
           error: 'Not Found'
         });
@@ -396,7 +396,7 @@ export class BomService {
 
       if (!bom) {
         throw new RpcException({
-          status: 404,
+          status: 400,
           message: `BOM with ID ${id} not found`,
           error: 'Not Found'
         });
@@ -500,7 +500,7 @@ export class BomService {
 
       if (!bom) {
         throw new RpcException({
-          status: 404,
+          status: 400,
           message: `BOM not found for master product ID: ${masterProductId}`,
           error: 'Not Found'
         });
@@ -629,7 +629,7 @@ export class BomService {
 
       if (!bom) {
         throw new RpcException({
-          status: 404,
+          status: 400,
           message: `BOM with ID ${id} not found`,
           error: 'Not Found'
         });
@@ -825,7 +825,7 @@ export class BomService {
 
       if (!boms || boms.length === 0) {
         throw new RpcException({
-          status: 404,
+          status: 400,
           message: `No BOMs found for warehouse ID: ${warehouseId}`,
           error: 'Not Found'
         });
@@ -990,7 +990,7 @@ export class BomService {
 
         if (!bom) {
           throw new RpcException({
-            status: 404,
+            status: 400,
             message: `BOM not found with ID: ${upsertCraftingDto.bomId}`,
             error: 'Not Found'
           });
@@ -1131,7 +1131,7 @@ export class BomService {
 
       if (!currentFinishedProduct) {
         throw new RpcException({
-          status: 404,
+          status: 400,
           message: `Finished product not found for BOM ID: ${crafting.bomId}`,
           error: 'Not Found'
         });
@@ -1165,7 +1165,7 @@ export class BomService {
 
       if (!crafting) {
         throw new RpcException({
-          status: 404,
+          status: 400,
           message: `Crafting record not found with ID: ${id}`,
           error: 'Not Found'
         });
