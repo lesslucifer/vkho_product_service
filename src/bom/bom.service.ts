@@ -69,6 +69,15 @@ export class BomService {
     this.logger.log(`Request to save BOM`);
 
     try {
+      // Validate that bomFinishedProduct is provided
+      if (!createBomDto.bomFinishedProduct) {
+        throw new RpcException({
+          status: 400,
+          message: 'The finished product is required',
+          error: 'Bad Request'
+        });
+      }
+
       // Validate and transform status
       if (createBomDto.status) {
         const validStatus = Object.values(BomStatus).includes(createBomDto.status as BomStatus);
