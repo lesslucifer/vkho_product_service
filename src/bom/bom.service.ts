@@ -956,166 +956,13 @@ export class BomService {
     this.logger.log(`Request to upsert crafting: ${JSON.stringify(upsertCraftingDto)}`);
 
     try {
-      // Validate required fields for creating a new crafting record
-      if (!upsertCraftingDto.bomId || !upsertCraftingDto.quantity) {
-        throw new RpcException({
-          status: 400,
-          message: 'bomId and quantity are required for creating a crafting record',
-          error: 'Bad Request'
-        });
+      // Check if this is an update operation (id is provided)
+      if (upsertCraftingDto.id) {
+        return await this.updateCrafting(upsertCraftingDto);
       }
 
-      // Check if status is NEW
-      if (upsertCraftingDto.status === CraftingStatus.NEW) {
-        // Create a new crafting record
-        const newCrafting = this.craftingRepository.create({
-          bomId: upsertCraftingDto.bomId,
-          quantity: upsertCraftingDto.quantity,
-          status: CraftingStatus.NEW,
-          notes: upsertCraftingDto.notes || null
-        });
-
-        const savedCrafting = await this.craftingRepository.save(newCrafting);
-
-        return {
-          success: true,
-          message: 'Crafting record created successfully',
-          craftingId: savedCrafting.id,
-          bomId: savedCrafting.bomId,
-          quantity: savedCrafting.quantity,
-          status: savedCrafting.status,
-          notes: savedCrafting.notes,
-          createdAt: savedCrafting.createdAt
-        };
-      }
-
-      // Check if status is DONE
-      if (upsertCraftingDto.status === CraftingStatus.DONE) {
-        // Get BOM with finished product and warehouse
-        const bom = await this.bomRepository.findOne({
-          where: { id: upsertCraftingDto.bomId },
-          relations: ['bomFinishedProduct', 'warehouse']
-        });
-
-        if (!bom) {
-          throw new RpcException({
-            status: 400,
-            message: `BOM not found with ID: ${upsertCraftingDto.bomId}`,
-            error: 'Not Found'
-          });
-        }
-
-        if (!bom.bomFinishedProduct) {
-          throw new RpcException({
-            status: 400,
-            message: `BOM does not have a finished product configured`,
-            error: 'Bad Request'
-          });
-        }
-
-        // Get master product details of the finished product
-        let masterProduct;
-        try {
-          masterProduct = await this.masterProductsService.findOne(bom.bomFinishedProduct.masterProductId);
-        } catch (error) {
-          this.logger.warn(`Master product not found with ID: ${bom.bomFinishedProduct.masterProductId}`);
-          masterProduct = {
-            id: bom.bomFinishedProduct.masterProductId,
-            name: 'Unknown Product',
-            code: 'UNKNOWN',
-            availableQuantity: 0,
-            status: null
-          };
-        }
-
-        // Calculate quantity for the finished product based on BOM finished product quantity and crafting quantity
-        const finishedProductQuantity = bom.bomFinishedProduct.quantity * upsertCraftingDto.quantity;
-
-        // Create CreateProductDto for the finished product
-        const createProductDto: any = {
-          name: masterProduct.name,
-          totalQuantity: finishedProductQuantity,
-          expectedQuantity: finishedProductQuantity,
-          cost: 0, // Default value, should be set based on business logic
-          salePrice: 0, // Default value, should be set based on business logic
-          warehouseId: bom.warehouse.id,
-          inboundKind: 'CRAFTING', // Indicates this product was created through crafting
-          expireDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default 1 year from now
-          storageDate: new Date(),
-          productCode: masterProduct.code,
-          idRackReallocate: 0, // Default value
-          imageProduct: '', // Default empty
-          imageQRCode: '', // Default empty
-          imageBarcode: '', // Default empty
-          code: `${masterProduct.code}_CRAFTED_${Date.now()}`, // Generate unique code
-          note: `Created from crafting BOM ${bom.id} - Finished Product`,
-          barCode: '', // Default empty
-          blockId: 0, // Default value
-          rackId: 0, // Default value
-          rackCode: '', // Default empty
-          receiptId: 0, // Default value
-          supplierId: 0, // Default value
-          zoneId: 0, // Default value
-          orderId: 0, // Default value
-          packageId: 0, // Default value
-          masterProductId: bom.bomFinishedProduct.masterProductId,
-          productCategoryId: 0, // Default value
-          status1: 'ACTIVE' // Default status
-        };
-
-        // Create a new crafting record with DONE status
-        const newCrafting = this.craftingRepository.create({
-          bomId: upsertCraftingDto.bomId,
-          quantity: upsertCraftingDto.quantity,
-          status: CraftingStatus.DONE,
-          notes: upsertCraftingDto.notes || null
-        });
-
-        const savedCrafting = await this.craftingRepository.save(newCrafting);
-
-        // Create CreateReceiptDto from the CreateProductDto
-        const createReceiptDto: CreateReceiptDto = {
-          creatorId: 'SYSTEM', // Default system creator
-          creatorName: 'System Crafting', // Default system creator name
-          driverName: 'System', // Default driver name
-          boothCode: `CRAFT_${bom.id}`, // Generate booth code from BOM ID
-          receiptDate: new Date(), // Current date
-          description: `Receipt created from crafting BOM ${bom.id} - ${bom.name}`, // Description with BOM details
-          warehouseId: bom.warehouse.id, // Use BOM warehouse
-          supplierId: 0, // Default supplier ID (no supplier for crafting)
-          products: [createProductDto] // Use array with single CreateProductDto
-        };
-
-        // Save the receipt to database
-        const savedReceipt = await this.receiptsService.create(createReceiptDto);
-
-        return {
-          success: true,
-          message: 'Crafting record created successfully with DONE status and receipt saved',
-          craftingId: savedCrafting.id,
-          bomId: savedCrafting.bomId,
-          quantity: savedCrafting.quantity,
-          status: savedCrafting.status,
-          notes: savedCrafting.notes,
-          createdAt: savedCrafting.createdAt,
-          createProductDto: createProductDto, // Return the CreateProductDto
-          receipt: {
-            id: savedReceipt.id,
-            code: savedReceipt.code,
-            description: savedReceipt.description,
-            receiptDate: savedReceipt.receiptDate,
-            warehouseId: savedReceipt.warehouseId,
-            productsCount: savedReceipt.products?.length || 0
-          }
-        };
-      }
-
-      // For other statuses, handle accordingly
-      throw new RpcException({
-        status: 400,
-        message: 'Only NEW and DONE statuses are currently supported for creating crafting records',
-        error: 'Bad Request'
-      });
+      // Create new crafting record (id not provided)
+      return await this.createCrafting(upsertCraftingDto);
 
     } catch (error) {
       if (error instanceof RpcException) {
@@ -1123,10 +970,254 @@ export class BomService {
       }
       throw new RpcException({
         status: 500,
-        message: error.message || 'An error occurred while creating crafting record',
+        message: error.message || 'An error occurred while upserting crafting record',
         error: 'Internal Server Error'
       });
     }
+  }
+
+  private async updateCrafting(upsertCraftingDto: UpsertCraftingDto) {
+    // Find existing crafting record
+    const existingCrafting = await this.craftingRepository.findOne({
+      where: { id: upsertCraftingDto.id }
+    });
+
+    if (!existingCrafting) {
+      throw new RpcException({
+        status: 404,
+        message: `Crafting record not found with ID: ${upsertCraftingDto.id}`,
+        error: 'Not Found'
+      });
+    }
+
+    // Update existing crafting record
+    const updateData: Partial<Crafting> = {};
+    
+    if (upsertCraftingDto.status !== undefined) {
+      updateData.status = upsertCraftingDto.status;
+    }
+    if (upsertCraftingDto.notes !== undefined) {
+      updateData.notes = upsertCraftingDto.notes;
+    }
+    if (upsertCraftingDto.quantity !== undefined) {
+      updateData.quantity = upsertCraftingDto.quantity;
+    }
+    if (upsertCraftingDto.bomId !== undefined) {
+      updateData.bomId = upsertCraftingDto.bomId;
+    }
+
+    // Update the record
+    await this.craftingRepository.update(upsertCraftingDto.id, updateData);
+
+    // Fetch the updated record
+    const updatedCrafting = await this.craftingRepository.findOne({
+      where: { id: upsertCraftingDto.id }
+    });
+
+    return {
+      success: true,
+      message: 'Crafting record updated successfully',
+      craftingId: updatedCrafting.id,
+      bomId: updatedCrafting.bomId,
+      quantity: updatedCrafting.quantity,
+      status: updatedCrafting.status,
+      notes: updatedCrafting.notes,
+      createdAt: updatedCrafting.createdAt,
+      updatedAt: updatedCrafting.updatedAt
+    };
+  }
+
+  private async createCrafting(upsertCraftingDto: UpsertCraftingDto) {
+    // Validate required fields for creating a new crafting record
+    if (!upsertCraftingDto.bomId || !upsertCraftingDto.quantity) {
+      throw new RpcException({
+        status: 400,
+        message: 'bomId and quantity are required for creating a crafting record',
+        error: 'Bad Request'
+      });
+    }
+
+    // Check if status is NEW
+    if (upsertCraftingDto.status === CraftingStatus.NEW) {
+      return await this.createNewCrafting(upsertCraftingDto);
+    }
+
+    // Check if status is DONE
+    if (upsertCraftingDto.status === CraftingStatus.DONE) {
+      return await this.createDoneCrafting(upsertCraftingDto);
+    }
+
+    // For other statuses, handle accordingly
+    throw new RpcException({
+      status: 400,
+      message: 'Only NEW and DONE statuses are currently supported for creating crafting records',
+      error: 'Bad Request'
+    });
+  }
+
+  private async createNewCrafting(upsertCraftingDto: UpsertCraftingDto) {
+    // Create a new crafting record
+    const newCrafting = this.craftingRepository.create({
+      bomId: upsertCraftingDto.bomId,
+      quantity: upsertCraftingDto.quantity,
+      status: CraftingStatus.NEW,
+      notes: upsertCraftingDto.notes || null
+    });
+
+    const savedCrafting = await this.craftingRepository.save(newCrafting);
+
+    return {
+      success: true,
+      message: 'Crafting record created successfully',
+      craftingId: savedCrafting.id,
+      bomId: savedCrafting.bomId,
+      quantity: savedCrafting.quantity,
+      status: savedCrafting.status,
+      notes: savedCrafting.notes,
+      createdAt: savedCrafting.createdAt
+    };
+  }
+
+  private async createDoneCrafting(upsertCraftingDto: UpsertCraftingDto) {
+    // Get BOM with finished product and warehouse
+    const bom = await this.getBomWithRelations(upsertCraftingDto.bomId);
+
+    // Get master product details of the finished product
+    const masterProduct = await this.getMasterProduct(bom.bomFinishedProduct.masterProductId);
+
+    // Calculate quantity for the finished product based on BOM finished product quantity and crafting quantity
+    const finishedProductQuantity = bom.bomFinishedProduct.quantity * upsertCraftingDto.quantity;
+
+    // Create CreateProductDto for the finished product
+    const createProductDto = this.createProductDtoForCrafting(masterProduct, finishedProductQuantity, bom);
+
+    // Create a new crafting record with DONE status
+    const savedCrafting = await this.saveCraftingRecord(upsertCraftingDto, CraftingStatus.DONE);
+
+    // Create and save receipt
+    const savedReceipt = await this.createAndSaveReceipt(createProductDto, bom);
+
+    return {
+      success: true,
+      message: 'Crafting record created successfully with DONE status and receipt saved',
+      craftingId: savedCrafting.id,
+      bomId: savedCrafting.bomId,
+      quantity: savedCrafting.quantity,
+      status: savedCrafting.status,
+      notes: savedCrafting.notes,
+      createdAt: savedCrafting.createdAt,
+      createProductDto: createProductDto,
+      receipt: {
+        id: savedReceipt.id,
+        code: savedReceipt.code,
+        description: savedReceipt.description,
+        receiptDate: savedReceipt.receiptDate,
+        warehouseId: savedReceipt.warehouseId,
+        productsCount: savedReceipt.products?.length || 0
+      }
+    };
+  }
+
+  private async getBomWithRelations(bomId: number) {
+    const bom = await this.bomRepository.findOne({
+      where: { id: bomId },
+      relations: ['bomFinishedProduct', 'warehouse']
+    });
+
+    if (!bom) {
+      throw new RpcException({
+        status: 400,
+        message: `BOM not found with ID: ${bomId}`,
+        error: 'Not Found'
+      });
+    }
+
+    if (!bom.bomFinishedProduct) {
+      throw new RpcException({
+        status: 400,
+        message: `BOM does not have a finished product configured`,
+        error: 'Bad Request'
+      });
+    }
+
+    return bom;
+  }
+
+  private async getMasterProduct(masterProductId: number) {
+    try {
+      return await this.masterProductsService.findOne(masterProductId);
+    } catch (error) {
+      this.logger.warn(`Master product not found with ID: ${masterProductId}`);
+      return {
+        id: masterProductId,
+        name: 'Unknown Product',
+        code: 'UNKNOWN',
+        availableQuantity: 0,
+        status: null
+      };
+    }
+  }
+
+  private createProductDtoForCrafting(masterProduct: any, finishedProductQuantity: number, bom: any) {
+    return {
+      name: masterProduct.name,
+      totalQuantity: finishedProductQuantity,
+      expectedQuantity: finishedProductQuantity,
+      cost: 0, // Default value, should be set based on business logic
+      salePrice: 0, // Default value, should be set based on business logic
+      warehouseId: bom.warehouse.id,
+      inboundKind: 'CRAFTING', // Indicates this product was created through crafting
+      expireDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Default 1 year from now
+      storageDate: new Date(),
+      productCode: masterProduct.code,
+      idRackReallocate: 0, // Default value
+      imageProduct: '', // Default empty
+      imageQRCode: '', // Default empty
+      imageBarcode: '', // Default empty
+      code: `${masterProduct.code}_CRAFTED_${Date.now()}`, // Generate unique code
+      note: `Created from crafting BOM ${bom.id} - Finished Product`,
+      barCode: '', // Default empty
+      blockId: 0, // Default value
+      rackId: 0, // Default value
+      rackCode: '', // Default empty
+      receiptId: 0, // Default value
+      supplierId: 0, // Default value
+      zoneId: 0, // Default value
+      orderId: 0, // Default value
+      packageId: 0, // Default value
+      masterProductId: bom.bomFinishedProduct.masterProductId,
+      productCategoryId: 0, // Default value
+      status1: 'ACTIVE' // Default status
+    };
+  }
+
+  private async saveCraftingRecord(upsertCraftingDto: UpsertCraftingDto, status: CraftingStatus) {
+    const newCrafting = this.craftingRepository.create({
+      bomId: upsertCraftingDto.bomId,
+      quantity: upsertCraftingDto.quantity,
+      status: status,
+      notes: upsertCraftingDto.notes || null
+    });
+
+    return await this.craftingRepository.save(newCrafting);
+  }
+
+  private async createAndSaveReceipt(createProductDto: any, bom: any) {
+    // Create CreateReceiptDto from the CreateProductDto
+    const createReceiptDto: CreateReceiptDto = {
+      creatorId: 'SYSTEM', // Default system creator
+      creatorName: 'System Crafting', // Default system creator name
+      driverName: 'System', // Default driver name
+      boothCode: `CRAFT_${bom.id}`, // Generate booth code from BOM ID
+      receiptDate: new Date(), // Current date
+      description: `Receipt created from crafting BOM ${bom.id} - ${bom.name}`, // Description with BOM details
+      warehouseId: bom.warehouse.id, // Use BOM warehouse
+      supplierId: 0, // Default supplier ID (no supplier for crafting)
+      products: [createProductDto] // Use array with single CreateProductDto
+    };
+
+    // Save the receipt to database
+    return await this.receiptsService.create(createReceiptDto);
   }
 
   private async completeCrafting(crafting: Crafting) {
