@@ -49,4 +49,36 @@ export class MasterProductsController {
   remove(@Payload() id: number) {
     return this.masterProductsService.remove(id);
   }
+
+  @MessagePattern(MASTER_PRODUCT_PATTERN.MASTER_PRODUCT_GET_AVAILABLE_QUANTITY)
+  getAvailableQuantity(@Payload() masterProductId: number): Promise<{ availableQuantity: number }> {
+    return this.masterProductsService.getAvailableQuantity(masterProductId);
+  }
+
+  @MessagePattern(MASTER_PRODUCT_PATTERN.MASTER_PRODUCT_RECALCULATE_QUANTITY)
+  recalculateAvailableQuantity(@Payload() masterProductId: number): Promise<{ availableQuantity: number }> {
+    return this.masterProductsService.recalculateAvailableQuantity(masterProductId);
+  }
+
+  @MessagePattern(MASTER_PRODUCT_PATTERN.MASTER_PRODUCT_GET_AVAILABLE_BY_BARCODE)
+  getAvailableQuantityByBarcode(@Payload() data: { barCode: string; warehouseId: number }): Promise<{ availableQuantity: number }> {
+    return this.masterProductsService.getAvailableQuantityByBarcode(data.barCode, data.warehouseId);
+  }
+
+  @MessagePattern(MASTER_PRODUCT_PATTERN.MASTER_PRODUCT_BULK_UPDATE_QUANTITIES)
+  bulkUpdateAvailableQuantities(@Payload() warehouseId: number): Promise<void> {
+    return this.masterProductsService.bulkUpdateAvailableQuantities(warehouseId);
+  }
+
+  @MessagePattern(MASTER_PRODUCT_PATTERN.MASTER_PRODUCT_GET_ALL_WITH_QUANTITY)
+  getAllWithAvailableQuantity(@Payload() warehouseId: number): Promise<any[]> {
+    return this.masterProductsService.getAllWithAvailableQuantity(warehouseId);
+  }
+
+  @MessagePattern(MASTER_PRODUCT_PATTERN.MASTER_PRODUCT_GET_BY_WAREHOUSE)
+  getAvailableQuantityByWarehouse(@Payload() data: { warehouseId: number; page?: number; limit?: number }): Promise<ResponseDTO> {
+    const page = data.page || 1;
+    const limit = data.limit || 10;
+    return this.masterProductsService.getAvailableQuantityByWarehouse(data.warehouseId, page, limit);
+  }
 }
