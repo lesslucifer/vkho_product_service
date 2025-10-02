@@ -439,4 +439,177 @@ export class MasterProductsService {
     if (res > 0) throw new RpcException(`This ${barCode} barCode already exists`);
   }
 
+  async getAvailableQuantity(masterProductId: number): Promise<{ availableQuantity: number }> {
+    this.logger.log(`Request to get available quantity for MasterProduct: ${masterProductId}`);
+
+    const masterProduct = await this.masterProductRepository.findOne(masterProductId);
+
+    if (!masterProduct) {
+      throw new RpcException('Master product not found');
+    }
+
+    const queryBuilder = this.productService['productRepository'].createQueryBuilder('product');
+
+    const result = await queryBuilder
+      .select('SUM(product.totalQuantity)', 'totalAvailable')
+      .where('product.masterProductId = :masterProductId', { masterProductId })
+      .andWhere('product.status = :status', { status: ProductStatus.STORED })
+      .andWhere('product.warehouseId = :warehouseId', { warehouseId: masterProduct.warehouseId })
+      .getRawOne();
+
+    const availableQuantity = parseInt(result?.totalAvailable) || 0;
+
+    if (masterProduct.availableQuantity !== availableQuantity) {
+      masterProduct.availableQuantity = availableQuantity;
+      await this.masterProductRepository.save(masterProduct);
+    }
+
+    return { availableQuantity };
+  }
+
+  async recalculateAvailableQuantity(masterProductId: number): Promise<{ availableQuantity: number }> {
+    this.logger.log(`Recalculating available quantity for MasterProduct: ${masterProductId}`);
+
+    const masterProduct = await this.masterProductRepository.findOne(masterProductId);
+
+    if (!masterProduct) {
+      throw new RpcException('Master product not found');
+    }
+
+    const products = await this.productService.getProductsByStatus(ProductStatus.STORED, masterProduct.warehouseId);
+
+    const availableQuantity = products
+      .filter(product => product.masterProduct?.id === masterProductId)
+      .reduce((total, product) => total + product.totalQuantity, 0);
+
+    masterProduct.availableQuantity = availableQuantity;
+    await this.masterProductRepository.save(masterProduct);
+
+    this.logger.log(`Updated available quantity for MasterProduct ${masterProductId}: ${availableQuantity}`);
+
+    return { availableQuantity };
+  }
+
+  async getAvailableQuantityByBarcode(barCode: string, warehouseId: number): Promise<{ availableQuantity: number }> {
+    this.logger.log(`Request to get available quantity by barcode: ${barCode}`);
+
+    const masterProduct = await this.masterProductRepository.findOne({
+      where: {
+        barCode: barCode,
+        warehouseId: warehouseId
+      }
+    });
+
+    if (!masterProduct) {
+      throw new RpcException('Master product not found with this barcode');
+    }
+
+    return this.getAvailableQuantity(masterProduct.id);
+  }
+
+  async bulkUpdateAvailableQuantities(warehouseId: number): Promise<void> {
+    this.logger.log(`Bulk updating available quantities for warehouse: ${warehouseId}`);
+
+    const masterProducts = await this.masterProductRepository.find({
+      where: { warehouseId }
+    });
+
+    for (const masterProduct of masterProducts) {
+      await this.recalculateAvailableQuantity(masterProduct.id);
+    }
+
+    this.logger.log(`Completed bulk update for ${masterProducts.length} master products`);
+  }
+
+  async getAllWithAvailableQuantity(warehouseId: number): Promise<any[]> {
+    this.logger.log(`Getting all master products with available quantities for warehouse: ${warehouseId}`);
+
+    const queryBuilder = this.masterProductRepository.createQueryBuilder('master');
+
+    const masterProducts = await queryBuilder
+      .leftJoinAndSelect('master.productCategory', 'productCategory')
+      .leftJoinAndSelect('master.suppliers', 'suppliers')
+      .where('master.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('master.status != :status', { status: MasterProductStatus.DISABLE })
+      .getMany();
+
+    const productQuantities = await this.productService['productRepository']
+      .createQueryBuilder('product')
+      .select('product.masterProductId', 'masterProductId')
+      .addSelect('SUM(product.totalQuantity)', 'availableQuantity')
+      .where('product.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('product.status = :status', { status: ProductStatus.STORED })
+      .groupBy('product.masterProductId')
+      .getRawMany();
+
+    const quantityMap = new Map(
+      productQuantities.map(item => [
+        parseInt(item.masterProductId),
+        parseInt(item.availableQuantity) || 0
+      ])
+    );
+
+    const result = masterProducts.map(masterProduct => ({
+      ...masterProduct,
+      availableQuantity: quantityMap.get(masterProduct.id) || 0
+    }));
+
+    return result;
+  }
+
+  async getAvailableQuantityByWarehouse(warehouseId: number, page: number = 1, limit: number = 10): Promise<ResponseDTO> {
+    this.logger.log(`Getting paginated master products with quantities for warehouse: ${warehouseId}`);
+
+    const queryBuilder = this.masterProductRepository.createQueryBuilder('master');
+
+    queryBuilder
+      .leftJoinAndSelect('master.productCategory', 'productCategory')
+      .leftJoinAndSelect('productCategory.parentProductCategory', 'parentProductCategory')
+      .leftJoinAndSelect('master.suppliers', 'suppliers')
+      .where('master.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('master.status != :status', { status: MasterProductStatus.DISABLE });
+
+    const skippedItems = (page - 1) * limit;
+
+    queryBuilder
+      .skip(skippedItems)
+      .take(limit)
+      .orderBy('master.id', 'ASC');
+
+    const [masterProducts, totalItem] = await queryBuilder.getManyAndCount();
+
+    const masterProductIds = masterProducts.map(mp => mp.id);
+
+    let quantityMap = new Map();
+
+    if (masterProductIds.length > 0) {
+      const productQuantities = await this.productService['productRepository']
+        .createQueryBuilder('product')
+        .select('product.masterProductId', 'masterProductId')
+        .addSelect('SUM(product.totalQuantity)', 'availableQuantity')
+        .where('product.warehouseId = :warehouseId', { warehouseId })
+        .andWhere('product.status = :status', { status: ProductStatus.STORED })
+        .andWhere('product.masterProductId IN (:...masterProductIds)', { masterProductIds })
+        .groupBy('product.masterProductId')
+        .getRawMany();
+
+      quantityMap = new Map(
+        productQuantities.map(item => [
+          parseInt(item.masterProductId),
+          parseInt(item.availableQuantity) || 0
+        ])
+      );
+    }
+
+    const data = masterProducts.map(masterProduct => ({
+      masterProduct: masterProduct,
+      quantity: quantityMap.get(masterProduct.id) || 0
+    }));
+
+    return {
+      data,
+      totalItem
+    };
+  }
+
 }
