@@ -10,6 +10,7 @@ import { IdsDTO } from 'src/common/list-id.dto';
 import { parseDate } from 'src/common/partDateTime';
 import { ResponseDTO } from 'src/common/response.dto';
 import { DECREMENT, INCREMENT, PRODUCT_CODE_PATTERN, STATUS_UPDATE_CAPACITY_ARRAY } from 'src/constants/product.constants';
+import { MasterProductMethod } from 'src/master-products/enums/master-product-method';
 import { MasterProductsService } from 'src/master-products/master-products.service';
 import { ProductCategorysService } from 'src/product-categorys/product-categorys.service';
 import { RecommendDTO } from 'src/racks/dto/recommend-rack.dto';
@@ -222,7 +223,7 @@ export class ProductService {
 
     }
 
-    const data = queryBuilder.leftJoinAndSelect('masterProduct.suppliers', 'suppliers')
+    queryBuilder.leftJoinAndSelect('masterProduct.suppliers', 'suppliers')
       .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
       .leftJoinAndSelect('product.rack', 'rack')
       .leftJoinAndSelect('product.block', 'block')
@@ -230,14 +231,28 @@ export class ProductService {
       .leftJoinAndSelect('rack.shelf', 'shelf')
       .leftJoinAndSelect('product.receipt', 'receipt')
       .leftJoinAndSelect('product.zone', 'zone')
-      .orderBy("rack.id", "ASC")
-      .getManyAndCount()
+
+    const masterProduct = await this.masterProductsService.findOne(recommendProduct.masterProductId);
+
+    if (masterProduct?.method === MasterProductMethod.FIFO) {
+      queryBuilder.orderBy("product.storageDate", "ASC", "NULLS LAST")
+        .addOrderBy("rack.id", "ASC");
+    } else if (masterProduct?.method === MasterProductMethod.LIFO) {
+      queryBuilder.orderBy("product.storageDate", "DESC", "NULLS LAST")
+        .addOrderBy("rack.id", "ASC");
+    } else if (masterProduct?.method === MasterProductMethod.FEFO) {
+      queryBuilder.orderBy("product.expireDate", "ASC", "NULLS LAST")
+        .addOrderBy("rack.id", "ASC");
+    } else {
+      queryBuilder.orderBy("rack.id", "ASC");
+    }
+
+    const data = await queryBuilder.getManyAndCount();
 
     const res = new ResponseDTO();
-    await data?.then(rs => {
-      res.totalItem = rs[1];
-      res.data = rs[0];
-    });
+    res.totalItem = data[1];
+    res.data = data[0];
+
     let total = 0;
     const dataRecommend = [];
     let count = 0;
