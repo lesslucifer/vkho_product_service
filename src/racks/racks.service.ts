@@ -109,20 +109,42 @@ export class RacksService {
     return res;
   }
 
+  async recommendRackWithFallback(recommendDTO: RecommendDTO): Promise<Rack> {
+    this.logger.log(`Request to get recommend Rack with fallback`);
+    try {
+      return await this.recommendRack(recommendDTO);
+    }
+    catch (err) {
+      if (recommendDTO.parentProductCategoryId) {
+        return await this.recommendRack({
+          ...recommendDTO,
+          parentProductCategoryId: null
+        });
+      }
+      throw err;
+    }
+  }
+
   async recommendRack(recommendDTO: RecommendDTO): Promise<Rack> {
     this.logger.log(`Request to get recommend Rack`);
 
-    const res =  await this.rackRepository.createQueryBuilder("rack")
-      .leftJoinAndSelect("rack.parentProductCategory", "parentProductCategory")
-      .where("parentProductCategory.id = :parentProductCategoryId", { parentProductCategoryId: recommendDTO.parentProductCategoryId })
+    const queryBuilder = this.rackRepository.createQueryBuilder("rack");
+
+    if (recommendDTO.parentProductCategoryId) {
+      queryBuilder
+        .leftJoinAndSelect("rack.parentProductCategory", "parentProductCategory")
+        .where("parentProductCategory.id = :parentProductCategoryId", { parentProductCategoryId: recommendDTO.parentProductCategoryId });
+    }
+
+    const res = await queryBuilder
       .andWhere("rack.capacity - rack.usedCapacity >= :totalCapacity", { totalCapacity: recommendDTO.totalCapacity })
       .andWhere("rack.warehouseId = :warehouseId", { warehouseId: recommendDTO.warehouseId })
       .andWhere("rack.status = :status", { status: RackStatus.ENABLE })
-      .orderBy("rack.id", "ASC")
+      .orderBy("rack.capacity - rack.usedCapacity", "ASC")
       .leftJoinAndSelect("rack.shelf", "shelf")
       .leftJoinAndSelect("shelf.block", "block")
       .getOne();
-    
+
     if (!res) throw new RpcException('There is no suitable location');
     return res;
   }
