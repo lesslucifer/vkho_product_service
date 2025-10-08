@@ -57,11 +57,7 @@ export class MasterProductsService {
     this.validateInputs(createMasterProductDto);
     
     try {
-      const count = await this.countCodeResource(createMasterProductDto.isResources);
-      if (createMasterProductDto.isResources) 
-        createMasterProductDto.code = (Number(MASTER_PRODUCT_CODE_PATTERN_RESOURCE) + count).toString();
-      else 
-        createMasterProductDto.code = (Number(MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE) + count).toString();
+      createMasterProductDto.code = await this.generateMasterProductCode();
 
       if (!createMasterProductDto.barCode) createMasterProductDto.barCode = createMasterProductDto.code;
       await this.checkBarCode(createMasterProductDto.barCode, createMasterProductDto.warehouseId);
@@ -113,10 +109,26 @@ export class MasterProductsService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async countCodeResource(isResources: boolean){
+  async countCodeResource(){
     return await this.masterProductRepository.createQueryBuilder("master")
-    .where("master.isResources = :isResources", {isResources: isResources})
     .getCount();
+  }
+
+  async getWhGroup(): Promise<any> {
+    // Returns nothing (undefined/null)
+    return;
+  }
+
+  async generateMasterProductCode(): Promise<string> {
+    const whGroup = await this.getWhGroup();
+
+    if (!whGroup) {
+      const count = await this.countCodeResource();
+      return (Number(MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE) + count).toString();
+    }
+
+    // Additional logic for when whGroup exists can be added here
+    return '10000000';
   }
 
   async createExcel(createDivisonDto: BufferedFile) {
@@ -236,6 +248,10 @@ export class MasterProductsService {
   async findAll(masterProductFilter: MasterProductFilter): Promise<ResponseDTO> {
     this.logger.log(`Request to get all Master Product`);
     const queryBuilder = this.masterProductRepository.createQueryBuilder("master");
+
+    if(masterProductFilter.masterProductId) {
+      queryBuilder.where("master.id = :masterProductId", { masterProductId: masterProductFilter.masterProductId })
+    }
 
     if (masterProductFilter.warehouseId) {
       queryBuilder.where("master.warehouseId = :warehouseId", { warehouseId: masterProductFilter.warehouseId })
