@@ -62,6 +62,29 @@ export class ProductService {
     createProductDto.totalQuantity = createProductDto.expectedQuantity;
     createProductDto.name = createProductDto.name?.trim();
 
+    // Remove empty string values for foreign keys to prevent TypeORM errors
+    const cleanEmptyField = (value: any) => {
+      if (value === null || value === undefined) return true;
+      if (typeof value === 'string' && value.trim() === '') return true;
+      return false;
+    };
+
+    // Clean up all optional foreign key fields - iterate through all keys
+    Object.keys(createProductDto).forEach(key => {
+      const value = createProductDto[key];
+      // Check if it's a potential ID field (ends with Id or is a known foreign key)
+      if (key.endsWith('Id') || ['idRackReallocate'].includes(key)) {
+        if (cleanEmptyField(value)) {
+          delete createProductDto[key];
+        }
+      }
+      // Also clean relation fields that are empty strings (but keep objects)
+      const relationFields = ['supplier', 'rack', 'zone', 'block', 'masterProduct', 'productCategory'];
+      if (relationFields.includes(key) && typeof value === 'string' && value.trim() === '') {
+        delete createProductDto[key];
+      }
+    });
+
     const newProduct = this.productRepository.create(createProductDto);
 
     if (createProductDto.receiptId)
