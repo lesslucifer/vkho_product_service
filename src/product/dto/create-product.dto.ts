@@ -1,5 +1,4 @@
 import { Receipt } from "src/receipts/entities/receipt.entity";
-import { ProductStatus } from "../enum/product-status.enum";
 
 export class CreateProductDto {
   name: string;
