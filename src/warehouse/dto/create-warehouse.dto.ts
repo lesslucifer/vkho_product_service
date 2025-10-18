@@ -3,4 +3,5 @@ export class CreateWarehouseDto {
     address: string;
     acreage: number;
     userIds: string[];
+    warehouseGroupId?: number;
 }

@@ -1,9 +1,8 @@
 import { parseDate } from "src/common/partDateTime";
 import { BeforeInsert, Column, Entity, PrimaryGeneratedColumn } from "typeorm";
-import { WarehouseStatus } from "../enum/status.enum";
 
 @Entity()
-export class Warehouse {
+export class WarehouseGroup {
     @PrimaryGeneratedColumn()
     id: number;
 
@@ -13,27 +12,21 @@ export class Warehouse {
     @Column({ nullable: true })
     code: string;
 
-    @Column({ nullable: true })
-    address: string;
+    @Column()
+    userId: string;
 
     @Column({ nullable: true })
-    acreage: number;
+    description: string;
 
     @Column()
     createDate: Date;
 
-    @Column({ enum: WarehouseStatus, nullable: true })
-    status: string;
-
-    @Column("simple-array", {nullable: true})
-    userIds: string[];
-
     @Column({ nullable: true })
-    warehouseGroupId: number;
+    status: string;
 
     @BeforeInsert()
     private beforeInsert() {
-      this.status = WarehouseStatus.ENABLE;
+      this.status = 'ENABLE';
       this.createDate = parseDate(new Date());
     }
 }

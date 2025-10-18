@@ -8,6 +8,7 @@ import { FilterWarehouseDTO } from './dto/filter-warehouse.dto';
 import { IdsDTO } from 'src/common/list-id.dto';
 import { ResponseDTO } from 'src/common/response.dto';
 import { AddUserToWarehouse } from './dto/add-user-warehouse.dto';
+import { AddWarehouseGroupDto } from './dto/add-warehouse-group.dto';
 
 @Controller()
 export class WarehouseController {
@@ -57,5 +58,10 @@ export class WarehouseController {
   @MessagePattern(WAREHOUSE_PATTERN.WAREHOUSE_UPDATE_USER)
   updateUser(@Payload() add: AddUserToWarehouse) {
     return this.warehouseService.updateUser(add);
+  }
+
+  @MessagePattern(WAREHOUSE_PATTERN.WAREHOUSE_ADD_WAREHOUSE_GROUP)
+  addWarehouseGroup(@Payload() addWarehouseGroupDto: AddWarehouseGroupDto) {
+    return this.warehouseService.addWarehouseGroup(addWarehouseGroupDto);
   }
 }

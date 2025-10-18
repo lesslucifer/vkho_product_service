@@ -13,6 +13,8 @@ import { FilterWarehouseDTO } from './dto/filter-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { Warehouse } from './entities/warehouse.entity';
 import { WarehouseStatus } from './enum/status.enum';
+import { AddWarehouseGroupDto } from './dto/add-warehouse-group.dto';
+import { WarehouseGroupService } from 'src/warehouse-group/warehouse-group.service';
 
 @Injectable()
 export class WarehouseService {
@@ -24,10 +26,22 @@ export class WarehouseService {
     private warehouseRepository: Repository<Warehouse>,
     @Inject(forwardRef(() => ProductService))
     private readonly productService: ProductService,
+    @Inject(forwardRef(() => WarehouseGroupService))
+    private readonly warehouseGroupService: WarehouseGroupService,
   ) { }
 
   async create(createWarehouseDto: CreateWarehouseDto) {
     this.logger.log(`Request to save Warehouse: ${createWarehouseDto.name}`);
+    
+    // Validate warehouseGroupId if provided
+    if (createWarehouseDto.warehouseGroupId) {
+      try {
+        await this.warehouseGroupService.findOne(createWarehouseDto.warehouseGroupId);
+      } catch (error) {
+        throw new RpcException('Warehouse group not found');
+      }
+    }
+    
     const newWarehouse = this.warehouseRepository.create(createWarehouseDto);
 
     const res = await this.warehouseRepository.save(newWarehouse);
@@ -158,5 +172,16 @@ export class WarehouseService {
     for (const id of idsDTO.ids) {
       this.remove(Number(id));
     }
+  }
+
+  async addWarehouseGroup(addWarehouseGroupDto: AddWarehouseGroupDto) {
+    this.logger.log(`Request to add warehouse group to Warehouses: ${addWarehouseGroupDto.warehouseIds}`);
+    for (const id of addWarehouseGroupDto.warehouseIds) {
+      const warehouse = await this.warehouseRepository.findOne({ where: { id: id } });
+      if (!warehouse) throw new RpcException('Not found warehouse');
+      warehouse.warehouseGroupId = addWarehouseGroupDto.warehouseGroupId;
+      await this.warehouseRepository.update(warehouse.id, warehouse);
+    }
+    return { success: true, message: 'Warehouse group assigned successfully' };
   }
 }
