@@ -18,23 +18,24 @@ import { ParentProductCategorysModule } from './parent-product-categorys/parent-
 import { DivisonModule } from './divison/divison.module';
 import { VanModule } from './vans/van.module';
 import { BomModule } from './bom/bom.module';
+import { WarehouseGroupModule } from './warehouse-group/warehouse-group.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(), 
-    DatabaseModule, 
-    ProductModule, 
-    ZoneModule, 
-    ProductCategorysModule, 
+    ConfigModule.forRoot(),
+    DatabaseModule,
+    ProductModule,
+    ZoneModule,
+    ProductCategorysModule,
     ParentProductCategorysModule,
     DivisonModule,
-    SuppliersModule, 
-    RacksModule, 
-    ReceiptsModule, 
-    BlocksModule, 
-    ProductHistorysModule, 
-    ReplenishmentsModule, 
-    ShelfModule, WarehouseModule, MasterProductsModule, ReportsModule,
+    SuppliersModule,
+    RacksModule,
+    ReceiptsModule,
+    BlocksModule,
+    ProductHistorysModule,
+    ReplenishmentsModule,
+    ShelfModule, WarehouseModule, WarehouseGroupModule, MasterProductsModule, ReportsModule,
     VanModule,
     BomModule
   ],
