@@ -105,12 +105,11 @@ export class ProductService {
 
     if (createProductDto.barCode)
       newProduct.masterProduct = await this.masterProductsService.findByBarcode(createProductDto?.barCode);
-    
-    if (createProductDto.rackCode)
-      newProduct.rack = await this.racksService.findOneByCode(createProductDto?.rackCode,newProduct.warehouseId);
 
-    if(createProductDto.status1)
-    {
+    if (createProductDto.rackCode)
+      newProduct.rack = await this.racksService.findOneByCode(createProductDto?.rackCode, newProduct.warehouseId);
+
+    if (createProductDto.status1) {
       newProduct.status = ProductStatus.STORED;
       if (newProduct.rack) {
         newProduct.rack.usedCapacity += (newProduct.masterProduct.capacity * newProduct.totalQuantity);
@@ -118,7 +117,7 @@ export class ProductService {
       }
     }
     else
-    newProduct.status = ProductStatus.NEW;
+      newProduct.status = ProductStatus.NEW;
 
     const res = await this.productRepository.save(newProduct);
     const date = new Date(res.importDate);
@@ -128,7 +127,7 @@ export class ProductService {
     res.code = PRODUCT_CODE_PATTERN + res.id;
     const data = await this.productRepository.save(res);
     if (data) {
-      if(data.masterProduct && data.status === ProductStatus.STORED) {
+      if (data.masterProduct && data.status === ProductStatus.STORED) {
         const master = await this.masterProductsService.findOne(data.masterProduct.id);
         master.availableQuantity = master.availableQuantity + data.totalQuantity;
         await this.masterProductsService.update(master.id, master);
@@ -188,7 +187,7 @@ export class ProductService {
     if (splitProduct.isUpdateCode) {
 
     } else {
-      
+
 
       let codeTemp = "";
       if (product?.code?.includes("_")) {
@@ -740,7 +739,7 @@ export class ProductService {
         pro.block = rack?.shelf?.block;
       }
       products.push(pro);
-      
+
       if (pro?.masterProduct && updateProducts.status === ProductStatus.STORED) {
         const master = await this.masterProductsService.findOne(pro.masterProduct.id);
         if (master.availableQuantity)
@@ -773,7 +772,7 @@ export class ProductService {
       recommendRack.totalCapacity = productBeforeUpdate?.totalQuantity * productBeforeUpdate.masterProduct.capacity;
       recommendRack.parentProductCategoryId = productBeforeUpdate?.masterProduct?.productCategory?.parentProductCategory?.id;
       recommendRack.warehouseId = productBeforeUpdate?.warehouseId;
-      const rack = await this.racksService.recommendRack(recommendRack);
+      const rack = await this.racksService.recommendRackWithFallback(recommendRack);
 
       const product = new UpdateProductDto();
       const productAfter = Object.assign(product, productBeforeUpdate);
@@ -791,7 +790,7 @@ export class ProductService {
 
   async scan(scanProduct: ScanProduct) {
     this.logger.log(`Request to scan product`);
-    
+
     // First check if products exist at all
     if (scanProduct.productCodes?.length > 0) {
       const existingProducts = await this.productRepository.createQueryBuilder("product")
@@ -801,7 +800,7 @@ export class ProductService {
 
       const existingCodes = existingProducts.map(p => p.code);
       const nonExistentCodes = scanProduct.productCodes.filter(code => !existingCodes.includes(code));
-      
+
       if (nonExistentCodes.length > 0) {
         const responseScans = new ProductScanResponse();
         responseScans.errList = nonExistentCodes;
@@ -827,7 +826,7 @@ export class ProductService {
         queryBuilder.andWhere("masterProduct1.barCode IN (:...barCodes)", { barCodes: scanProduct.barCodes })
         queryBuilder.andWhere("product.status IN (:...status)", { status: [ProductStatus.PICKING] });
       }
-    
+
       if (scanProduct.type === ScanType.TEMPORARY_INBOUND && scanProduct?.productCodes?.length > 0) {
         queryBuilder.andWhere("product.status IN (:...status)", { status: [ProductStatus.TEMPORARY_OUT, ProductStatus.NEW] });
       }
@@ -977,7 +976,7 @@ export class ProductService {
 
   async getProductsByStatus(status: ProductStatus, warehouseId?: number): Promise<Product[]> {
     this.logger.log(`Request to get products by status: ${status}`);
-    
+
     const queryBuilder = this.productRepository.createQueryBuilder('product')
       .leftJoinAndSelect('product.masterProduct', 'masterProduct')
       .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
