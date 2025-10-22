@@ -30,3 +30,7 @@ export class GetProductsByStatusDto {
   status: ProductStatus;
   warehouseId?: number;
 }
+
+export class GetExpiredProductsDto extends PaginationDto {
+  includeToday?: boolean; // If true, includes products expiring today; if false, only products already expired
+}

@@ -25,6 +25,8 @@ import { CreatePinnowMasterProductDto } from './dto/create-master-product-pinnow
 import { QueryFailedError } from 'typeorm';
 import { MasterProductMethod } from './enums/master-product-method';
 import { InputValidator } from 'src/common/validators/input-validator';
+import { WarehouseGroupService } from 'src/warehouse-group/warehouse-group.service';
+import { WarehouseService } from 'src/warehouse/warehouse.service';
 
 @Injectable()
 export class MasterProductsService {
@@ -43,6 +45,10 @@ export class MasterProductsService {
     private readonly productCategorysService: ProductCategorysService,
     @Inject(forwardRef(() => ReplenishmentsService))
     private readonly replenishmentsService: ReplenishmentsService,
+    @Inject(forwardRef(() => WarehouseGroupService))
+    private readonly warehouseGroupService: WarehouseGroupService,
+    @Inject(forwardRef(() => WarehouseService))
+    private readonly warehouseService: WarehouseService,
     private configService: ConfigService,
   ) {}
 
@@ -57,7 +63,7 @@ export class MasterProductsService {
     this.validateInputs(createMasterProductDto);
     
     try {
-      createMasterProductDto.code = await this.generateMasterProductCode();
+      createMasterProductDto.code = await this.generateMasterProductCode(createMasterProductDto.warehouseId);
 
       if (!createMasterProductDto.barCode) createMasterProductDto.barCode = createMasterProductDto.code;
       await this.checkBarCode(createMasterProductDto.barCode, createMasterProductDto.warehouseId);
@@ -114,21 +120,42 @@ export class MasterProductsService {
     .getCount();
   }
 
-  async getWhGroup(): Promise<any> {
-    // Returns nothing (undefined/null)
-    return;
+  async getWhGroup(warehouseId: number): Promise<any> {
+    this.logger.log(`Request to get warehouse group for warehouse: ${warehouseId}`);
+    
+    try {
+      // First, get the warehouse to find its warehouseGroupId
+      const warehouse = await this.warehouseService.findOne(warehouseId);
+      
+      if (!warehouse || !warehouse.warehouseGroupId) {
+        this.logger.log(`No warehouse group found for warehouse: ${warehouseId}`);
+        return null;
+      }
+      
+      // Get the warehouse group by ID
+      const warehouseGroup = await this.warehouseGroupService.findOne(warehouse.warehouseGroupId);
+      
+      this.logger.log(`Found warehouse group: ${warehouseGroup.name} for warehouse: ${warehouseId}`);
+      return warehouseGroup;
+      
+    } catch (error) {
+      this.logger.error(`Error getting warehouse group for warehouse ${warehouseId}:`, error.message);
+      return null;
+    }
   }
 
-  async generateMasterProductCode(): Promise<string> {
-    const whGroup = await this.getWhGroup();
+  async generateMasterProductCode(warehouseId: number): Promise<string> {
+    const whGroup = await this.getWhGroup(warehouseId);
 
     if (!whGroup) {
       const count = await this.countCodeResource();
-      return (Number(MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE) + count).toString();
+      return (10000000 + count).toString();
     }
 
-    // Additional logic for when whGroup exists can be added here
-    return '10000000';
+    // When warehouse group exists, use format: {warehouseGroupCode}_incremental_number
+    const count = await this.countCodeResource();
+    const incrementalNumber = Number(MASTER_PRODUCT_CODE_PATTERN_RESOURCE) + count;
+    return `${whGroup.code}_${incrementalNumber}`;
   }
 
   async createExcel(createDivisonDto: BufferedFile) {
