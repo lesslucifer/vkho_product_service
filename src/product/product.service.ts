@@ -994,6 +994,63 @@ export class ProductService {
     return queryBuilder.getMany();
   }
 
+  async getExpiredProducts(filter: any): Promise<ResponseDTO> {
+    this.logger.log(`Request to get expired products`);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+    
+    const queryBuilder = this.productRepository.createQueryBuilder('product')
+      .leftJoinAndSelect('product.masterProduct', 'masterProduct')
+      .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
+      .leftJoinAndSelect('masterProduct.suppliers', 'suppliers')
+      .leftJoinAndSelect('product.block', 'block')
+      .leftJoinAndSelect('product.rack', 'rack')
+      .leftJoinAndSelect('product.supplier', 'supplier')
+      .leftJoinAndSelect('rack.shelf', 'shelf')
+      .leftJoinAndSelect('product.receipt', 'receipt')
+      .leftJoinAndSelect('product.zone', 'zone')
+      .where('product.expireDate IS NOT NULL');
+
+    // Filter by warehouse if provided
+    if (filter.warehouseId) {
+      queryBuilder.andWhere('product.warehouseId = :warehouseId', { warehouseId: filter.warehouseId });
+    }
+
+    // Filter by expire date - products that have expired
+    if (filter.includeToday === true) {
+      // Include products expiring today or already expired
+      queryBuilder.andWhere('product.expireDate <= :today', { today });
+    } else {
+      // Only products that have already expired (before today)
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      queryBuilder.andWhere('product.expireDate < :today', { today });
+    }
+
+    // Exclude disabled products
+    queryBuilder.andWhere('product.status != :status', { status: ProductStatus.DISABLE });
+
+    // Order by expire date (oldest first)
+    queryBuilder.orderBy('product.expireDate', 'ASC');
+
+    // Apply pagination
+    const skippedItems = (filter?.page - 1) * filter?.limit;
+    if (!isNaN(skippedItems)) {
+      queryBuilder
+        .skip(skippedItems)
+        .take(filter?.limit);
+    }
+
+    const data = await queryBuilder.getManyAndCount();
+    
+    const res = new ResponseDTO();
+    res.totalItem = data[1];
+    res.data = data[0];
+    
+    return res;
+  }
+
   async readExcel(dataExcel: BufferedFile) {
     const res = [];
     const filename = __dirname + dataExcel.fieldname + "-" + Date.now() + "-" + dataExcel.originalname;

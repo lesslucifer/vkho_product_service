@@ -9,6 +9,8 @@ import { ProductModule } from 'src/product/product.module';
 import { ConfigModule } from '@nestjs/config';
 import { ReplenishmentsModule } from 'src/replenishments/replenishments.module';
 import { HttpModule, HttpService } from '@nestjs/axios';
+import { WarehouseGroupModule } from 'src/warehouse-group/warehouse-group.module';
+import { WarehouseModule } from 'src/warehouse/warehouse.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { HttpModule, HttpService } from '@nestjs/axios';
     forwardRef(() => SuppliersModule),
     forwardRef(() => ProductModule),
     forwardRef(() => ReplenishmentsModule),
+    forwardRef(() => WarehouseGroupModule),
+    forwardRef(() => WarehouseModule),
     ConfigModule,
     HttpModule
   ],
