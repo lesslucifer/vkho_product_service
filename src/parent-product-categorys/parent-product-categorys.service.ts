@@ -52,9 +52,32 @@ export class ParentProductCategorysService {
   async create(createParentProductCategoryDto: CreateParentProductCategoryDto) {
     this.logger.log(`Request to save Parent Product Category: ${createParentProductCategoryDto.name}`);
     //await this.checkNameProductCategory(createParentProductCategoryDto.name, createParentProductCategoryDto.warehouseId);
-    const newProductCategory = await this.parentProductCategoryRepository.create(createParentProductCategoryDto);
-    if (createParentProductCategoryDto.divisonId)
-      newProductCategory.divison = await this.divisonService.findOne(createParentProductCategoryDto?.divisonId);
+    
+    // Handle divisonId: convert string "undefined" to undefined, and convert string numbers to numbers
+    let divisonId: number | undefined = createParentProductCategoryDto.divisonId;
+    if (divisonId !== undefined && divisonId !== null) {
+      if (typeof divisonId === 'string') {
+        if (divisonId === 'undefined' || divisonId === 'null' || divisonId === '') {
+          divisonId = undefined;
+        } else {
+          const parsed = parseInt(divisonId, 10);
+          if (!isNaN(parsed)) {
+            divisonId = parsed;
+          } else {
+            divisonId = undefined;
+          }
+        }
+      }
+    }
+    
+    // Create entity without divisonId (it's a relation, not a column)
+    const { divisonId: _, ...entityData } = createParentProductCategoryDto;
+    const newProductCategory = await this.parentProductCategoryRepository.create(entityData);
+    
+    if (divisonId) {
+      newProductCategory.divison = await this.divisonService.findOne(divisonId);
+    }
+    
     const res = await this.parentProductCategoryRepository.save(newProductCategory);
 
     const codeDivison = newProductCategory?.divison?.code ? newProductCategory?.divison?.code : "";
@@ -184,8 +207,26 @@ export class ParentProductCategorysService {
     
     currentProductCategory.updateDate = parseDate(new Date());
 
-    if (currentProductCategory.divisonId)
-      currentProductCategory.divison = await this.divisonService.findOne(currentProductCategory?.divisonId);
+    // Handle divisonId: convert string "undefined" to undefined, and convert string numbers to numbers
+    let divisonId: number | undefined = currentProductCategory.divisonId;
+    if (divisonId !== undefined && divisonId !== null) {
+      if (typeof divisonId === 'string') {
+        if (divisonId === 'undefined' || divisonId === 'null' || divisonId === '') {
+          divisonId = undefined;
+        } else {
+          const parsed = parseInt(divisonId, 10);
+          if (!isNaN(parsed)) {
+            divisonId = parsed;
+          } else {
+            divisonId = undefined;
+          }
+        }
+      }
+    }
+
+    if (divisonId) {
+      currentProductCategory.divison = await this.divisonService.findOne(divisonId);
+    }
 
     delete currentProductCategory.divisonId;
     await this.parentProductCategoryRepository.update(id, currentProductCategory);
