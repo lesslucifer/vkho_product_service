@@ -23,8 +23,15 @@ export class ReceiptsController {
   @MessagePattern(RECEIPT_PATTERN.RECEIPT_GET_ALL)
   async findAll(@Payload() receiptFilter: ReceiptFilter): Promise<ResponseDTO> {
 
-    receiptFilter.page = Number(receiptFilter?.page)
-    receiptFilter.limit = Number(receiptFilter?.limit)
+    receiptFilter.page = Number(receiptFilter?.page) || 1;
+    receiptFilter.limit = Number(receiptFilter?.limit) || 10;
+    // Set default sorting for dashboard API
+    if (!receiptFilter.sortBy) {
+      receiptFilter.sortBy = 'receiptDate';
+    }
+    if (!receiptFilter.sortDirection) {
+      receiptFilter.sortDirection = 'desc';
+    }
 
     const receipts = await this.receiptsService.findAll({
       ...receiptFilter

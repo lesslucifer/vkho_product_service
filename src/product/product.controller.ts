@@ -61,8 +61,8 @@ export class ProductController {
 
   @MessagePattern(PRODUCT_PATTERN.PRODUCT_GET_ALL)
   async findAll(@Payload() productFilter: ProductFilter): Promise<ResponseDTO> {
-    productFilter.page = Number(productFilter?.page)
-    productFilter.limit = Number(productFilter?.limit)
+    productFilter.page = Number(productFilter?.page) || 1;
+    productFilter.limit = Number(productFilter?.limit) || 1000;
     
     const products = await this.productService.findAll({
       ...productFilter
