@@ -122,7 +122,8 @@ export class ReceiptsService {
         queryBuilder.orderBy(`receipt.${receiptFilter.sortBy}`, "DESC");
       else queryBuilder.orderBy(`receipt.${receiptFilter.sortBy}`, "ASC");
     } else {
-      queryBuilder.orderBy("receipt.id", "ASC");
+      // Default sorting by receiptDate descending for dashboard API
+      queryBuilder.orderBy("receipt.receiptDate", "DESC");
     }
 
     if (receiptFilter.status) {
@@ -144,7 +145,20 @@ export class ReceiptsService {
     const res = new ResponseDTO();
     await data?.then(rs => {
       res.totalItem = rs[1];
-      res.data = rs[0];
+      // Transform receipt entities to ensure inboundKind field is properly mapped
+      // Note: Entity has 'inboundkind' (lowercase) but API requires 'inboundKind' (camelCase)
+      res.data = rs[0].map(receipt => {
+        const receiptData: any = { ...receipt };
+        // Map inboundkind to inboundKind for API consistency
+        if (receiptData.inboundkind !== undefined) {
+          receiptData.inboundKind = receiptData.inboundkind;
+        }
+        // Ensure receiptDate is in ISO string format
+        if (receiptData.receiptDate instanceof Date) {
+          receiptData.receiptDate = receiptData.receiptDate.toISOString();
+        }
+        return receiptData;
+      });
     });
     return res;
   }

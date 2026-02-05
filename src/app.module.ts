@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ProductModule } from './product/product.module';
 import { ZoneModule } from './zone/zone.module';
 import { ConfigModule } from '@nestjs/config';
@@ -19,10 +20,12 @@ import { DivisonModule } from './divison/divison.module';
 import { VanModule } from './vans/van.module';
 import { BomModule } from './bom/bom.module';
 import { WarehouseGroupModule } from './warehouse-group/warehouse-group.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     ProductModule,
     ZoneModule,
@@ -37,7 +40,8 @@ import { WarehouseGroupModule } from './warehouse-group/warehouse-group.module';
     ReplenishmentsModule,
     ShelfModule, WarehouseModule, WarehouseGroupModule, MasterProductsModule, ReportsModule,
     VanModule,
-    BomModule
+    BomModule,
+    InventoryModule,
   ],
   controllers: [],
   providers: [],

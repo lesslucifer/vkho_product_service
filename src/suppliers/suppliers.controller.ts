@@ -21,8 +21,8 @@ export class SuppliersController {
   @MessagePattern(SUPPLIER_PATTERN.SUPPLIER_GET_ALL)
   async findAll(@Payload() supplierFilter: SupplierFilter): Promise<ResponseDTO> {
 
-    supplierFilter.page = Number(supplierFilter?.page)
-    supplierFilter.limit = Number(supplierFilter?.limit)
+    supplierFilter.page = Number(supplierFilter?.page) || 1;
+    supplierFilter.limit = Number(supplierFilter?.limit) || 10; // Default limit when not specified
 
     const suppliers: ResponseDTO = await this.suppliersService.findAll({
       ...supplierFilter
