@@ -21,12 +21,14 @@ import { VanModule } from './vans/van.module';
 import { BomModule } from './bom/bom.module';
 import { WarehouseGroupModule } from './warehouse-group/warehouse-group.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { UserExpirationModule } from './user-expiration/user-expiration.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     ScheduleModule.forRoot(),
     DatabaseModule,
+    UserExpirationModule,
     ProductModule,
     ZoneModule,
     ProductCategorysModule,
