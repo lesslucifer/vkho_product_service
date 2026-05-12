@@ -174,6 +174,30 @@ export class RacksService {
     throw new RpcException('Not found rack');
   }
 
+  /**
+   * Resolve rack by human-readable block (name or code), shelf name, and rack code within a warehouse.
+   */
+  async findByBlockShelfAndRackCode(
+    blockRef: string,
+    shelfName: string,
+    rackCode: string,
+    warehouseId: number,
+  ): Promise<Rack | null> {
+    if (!blockRef?.trim() || !shelfName?.trim() || !rackCode?.trim() || !warehouseId) {
+      return null;
+    }
+    const rack = await this.rackRepository
+      .createQueryBuilder('rack')
+      .leftJoinAndSelect('rack.shelf', 'shelf')
+      .leftJoinAndSelect('shelf.block', 'block')
+      .where('rack.warehouseId = :warehouseId', { warehouseId })
+      .andWhere('rack.code = :rackCode', { rackCode: rackCode.trim() })
+      .andWhere('shelf.name = :shelfName', { shelfName: shelfName.trim() })
+      .andWhere('(block.name = :blockRef OR block.code = :blockRef)', { blockRef: blockRef.trim() })
+      .getOne();
+    return rack ?? null;
+  }
+
   async update(id: number, currentRack: UpdateRackDto) {
     this.logger.log(`Request to update Rack: ${id}`);
     if (currentRack?.capacity === currentRack?.usedCapacity) currentRack.status = RackStatus.FULL;

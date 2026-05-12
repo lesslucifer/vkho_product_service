@@ -229,30 +229,35 @@ export class ProductService {
     this.logger.log(`Request to get products by masterProductId: ${recommendProduct.masterProductId}`);
     const queryBuilder = this.productRepository.createQueryBuilder("product");
 
-    if (recommendProduct.masterProductId) {
-      queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct')
-      queryBuilder.where("masterProduct.id = :masterProductId", { masterProductId: recommendProduct.masterProductId })
-    } else throw new RpcException('Master Product Id is required');
+    if (recommendProduct.masterProductId == null) {
+      throw new RpcException('Master Product Id is required');
+    }
 
-    queryBuilder.andWhere("product.status = :status", { status: ProductStatus.STORED });
+    queryBuilder
+      .leftJoinAndSelect('product.masterProduct', 'masterProduct')
+      .where('masterProduct.id = :masterProductId', { masterProductId: recommendProduct.masterProductId });
+
+    if (recommendProduct.warehouseId) {
+      queryBuilder.andWhere('product.warehouseId = :warehouseId', { warehouseId: recommendProduct.warehouseId });
+    }
+
+    queryBuilder.andWhere('product.status = :status', { status: ProductStatus.STORED });
 
     const skippedItems = (recommendProduct?.page - 1) * recommendProduct?.limit;
 
     if (!isNaN(skippedItems)) {
-      queryBuilder
-        .skip(skippedItems)
-        .take(recommendProduct?.limit)
-
+      queryBuilder.skip(skippedItems).take(recommendProduct?.limit);
     }
 
-    queryBuilder.leftJoinAndSelect('masterProduct.suppliers', 'suppliers')
+    queryBuilder
+      .leftJoinAndSelect('masterProduct.suppliers', 'suppliers')
       .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
       .leftJoinAndSelect('product.rack', 'rack')
       .leftJoinAndSelect('product.block', 'block')
       .leftJoinAndSelect('product.supplier', 'supplier')
       .leftJoinAndSelect('rack.shelf', 'shelf')
       .leftJoinAndSelect('product.receipt', 'receipt')
-      .leftJoinAndSelect('product.zone', 'zone')
+      .leftJoinAndSelect('product.zone', 'zone');
 
     const masterProduct = await this.masterProductsService.findOne(recommendProduct.masterProductId);
 
@@ -275,11 +280,12 @@ export class ProductService {
     res.totalItem = data[1];
     res.data = data[0];
 
+    const cap = recommendProduct.quantity ?? Number.MAX_SAFE_INTEGER;
     let total = 0;
     const dataRecommend = [];
     let count = 0;
     for (const item of res.data) {
-      if (total < recommendProduct.quantity) {
+      if (total < cap) {
         total += item.totalQuantity;
         count++;
         dataRecommend.push(item);
@@ -722,13 +728,34 @@ export class ProductService {
   async updates(updateProducts: UpdateProducts) {
     this.logger.log(`Request to updates products`);
 
-    let rack: Rack;
-    if (updateProducts.rackId)
-      rack = await this.racksService.findOne(updateProducts.rackId);
+    let rack: Rack | undefined;
+    if (updateProducts.rackId != null && !Number.isNaN(Number(updateProducts.rackId))) {
+      rack = await this.racksService.findOne(Number(updateProducts.rackId));
+    } else if (updateProducts.locations?.length) {
+      const firstId = updateProducts.ids?.[0];
+      if (firstId == null) {
+        throw new RpcException('ids required');
+      }
+      const proSample = await this.productRepository.findOne(Number(firstId));
+      if (!proSample) {
+        throw new RpcException('Not found product');
+      }
+      const loc = updateProducts.locations[0];
+      const resolved = await this.racksService.findByBlockShelfAndRackCode(
+        loc.block,
+        loc.shelf,
+        loc.rack,
+        proSample.warehouseId,
+      );
+      if (!resolved) {
+        throw new RpcException('Not found rack for block/shelf/rack in this warehouse');
+      }
+      rack = resolved;
+    }
 
     const products = [];
     for (let id of updateProducts.ids) {
-      const pro = await this.productRepository.findOne(id, { relations: ["masterProduct", "block", "rack", "receipt", "zone"] });
+      const pro = await this.productRepository.findOne(id, { relations: ['masterProduct', 'block', 'rack', 'receipt', 'zone'] });
       if (!pro) throw new RpcException('Not found product');
       if (updateProducts.status) pro.status = updateProducts.status;
       if (updateProducts.orderId) pro.orderId = updateProducts.orderId;
@@ -791,6 +818,24 @@ export class ProductService {
   async scan(scanProduct: ScanProduct) {
     this.logger.log(`Request to scan product`);
 
+    scanProduct.page = Number(scanProduct?.page) || 1;
+    scanProduct.limit = Number(scanProduct?.limit) || 1000;
+    if (scanProduct.productCode && (!scanProduct.productCodes?.length)) {
+      scanProduct.productCodes = [String(scanProduct.productCode).trim()];
+    }
+    if (!scanProduct.productCodes) {
+      scanProduct.productCodes = [];
+    }
+    if (!scanProduct.packageCodes) {
+      scanProduct.packageCodes = [];
+    }
+    if (!scanProduct.barCodes) {
+      scanProduct.barCodes = [];
+    }
+    if (!scanProduct.type) {
+      scanProduct.type = ScanType.OUTBOUND_PICKING;
+    }
+
     // First check if products exist at all
     if (scanProduct.productCodes?.length > 0) {
       const existingProducts = await this.productRepository.createQueryBuilder("product")
@@ -822,9 +867,9 @@ export class ProductService {
       }
 
       if (scanProduct.barCodes && scanProduct?.barCodes?.length > 0) {
-        queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct1')
-        queryBuilder.andWhere("masterProduct1.barCode IN (:...barCodes)", { barCodes: scanProduct.barCodes })
-        queryBuilder.andWhere("product.status IN (:...status)", { status: [ProductStatus.PICKING] });
+        queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct1');
+        queryBuilder.andWhere('masterProduct1.barCode IN (:...barCodes)', { barCodes: scanProduct.barCodes });
+        queryBuilder.andWhere('product.status IN (:...status)', { status: [ProductStatus.PICKING] });
       }
 
       if (scanProduct.type === ScanType.TEMPORARY_INBOUND && scanProduct?.productCodes?.length > 0) {
@@ -872,7 +917,7 @@ export class ProductService {
       .leftJoinAndSelect('rack.shelf', 'shelf')
       .leftJoinAndSelect('product.receipt', 'receipt')
       .leftJoinAndSelect('product.zone', 'zone')
-      .getMany()
+      .getMany();
 
     const res = [];
     const codes = [];

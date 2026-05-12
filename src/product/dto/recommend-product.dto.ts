@@ -1,6 +1,7 @@
-import { PaginationDto } from "src/common/pagination.dto";
+import { PaginationDto } from 'src/common/pagination.dto';
 
 export class RecommendProduct extends PaginationDto {
-    masterProductId: number;
-    quantity: number;
+  masterProductId?: number;
+  quantity?: number;
+  orderId?: number;
 }
