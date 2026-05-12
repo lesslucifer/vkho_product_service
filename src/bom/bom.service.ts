@@ -990,6 +990,10 @@ export class BomService {
       });
     }
 
+    if (upsertCraftingDto.status === CraftingStatus.DONE && existingCrafting.status !== CraftingStatus.DONE) {
+      return await this.completeExistingCrafting(existingCrafting, upsertCraftingDto);
+    }
+
     // Update existing crafting record
     const updateData: Partial<Crafting> = {};
     
@@ -1042,6 +1046,11 @@ export class BomService {
       return await this.createNewCrafting(upsertCraftingDto);
     }
 
+    // Check if status is CRAFTING
+    if (upsertCraftingDto.status === CraftingStatus.CRAFTING) {
+      return await this.createCraftingWithStatus(upsertCraftingDto, CraftingStatus.CRAFTING);
+    }
+
     // Check if status is DONE
     if (upsertCraftingDto.status === CraftingStatus.DONE) {
       return await this.createDoneCrafting(upsertCraftingDto);
@@ -1050,17 +1059,20 @@ export class BomService {
     // For other statuses, handle accordingly
     throw new RpcException({
       status: 400,
-      message: 'Only NEW and DONE statuses are currently supported for creating crafting records',
+      message: 'Only NEW, CRAFTING and DONE statuses are currently supported for creating crafting records',
       error: 'Bad Request'
     });
   }
 
   private async createNewCrafting(upsertCraftingDto: UpsertCraftingDto) {
-    // Create a new crafting record
+    return await this.createCraftingWithStatus(upsertCraftingDto, CraftingStatus.NEW);
+  }
+
+  private async createCraftingWithStatus(upsertCraftingDto: UpsertCraftingDto, status: CraftingStatus) {
     const newCrafting = this.craftingRepository.create({
       bomId: upsertCraftingDto.bomId,
       quantity: upsertCraftingDto.quantity,
-      status: CraftingStatus.NEW,
+      status,
       notes: upsertCraftingDto.notes || null
     });
 
@@ -1070,6 +1082,7 @@ export class BomService {
       success: true,
       message: 'Crafting record created successfully',
       craftingId: savedCrafting.id,
+      id: savedCrafting.id,
       bomId: savedCrafting.bomId,
       quantity: savedCrafting.quantity,
       status: savedCrafting.status,
@@ -1156,6 +1169,51 @@ export class BomService {
         status: null
       };
     }
+  }
+
+  private async completeExistingCrafting(existingCrafting: Crafting, upsertCraftingDto: UpsertCraftingDto) {
+    const bomId = upsertCraftingDto.bomId ?? existingCrafting.bomId;
+    const quantity = upsertCraftingDto.quantity ?? existingCrafting.quantity;
+    const notes = upsertCraftingDto.notes ?? existingCrafting.notes;
+
+    const bom = await this.getBomWithRelations(bomId);
+    const masterProduct = await this.getMasterProduct(bom.bomFinishedProduct.masterProductId);
+    const finishedProductQuantity = bom.bomFinishedProduct.quantity * quantity;
+    const createProductDto = this.createProductDtoForCrafting(masterProduct, finishedProductQuantity, bom);
+
+    await this.craftingRepository.update(existingCrafting.id, {
+      bomId,
+      quantity,
+      status: CraftingStatus.DONE,
+      notes
+    });
+
+    const updatedCrafting = await this.craftingRepository.findOne({
+      where: { id: existingCrafting.id }
+    });
+    const savedReceipt = await this.createAndSaveReceipt(createProductDto, bom);
+
+    return {
+      success: true,
+      message: 'Crafting record updated successfully with DONE status and receipt saved',
+      craftingId: updatedCrafting.id,
+      id: updatedCrafting.id,
+      bomId: updatedCrafting.bomId,
+      quantity: updatedCrafting.quantity,
+      status: updatedCrafting.status,
+      notes: updatedCrafting.notes,
+      createdAt: updatedCrafting.createdAt,
+      updatedAt: updatedCrafting.updatedAt,
+      createProductDto,
+      receipt: {
+        id: savedReceipt.id,
+        code: savedReceipt.code,
+        description: savedReceipt.description,
+        receiptDate: savedReceipt.receiptDate,
+        warehouseId: savedReceipt.warehouseId,
+        productsCount: savedReceipt.products?.length || 0
+      }
+    };
   }
 
   private createProductDtoForCrafting(masterProduct: any, finishedProductQuantity: number, bom: any) {
