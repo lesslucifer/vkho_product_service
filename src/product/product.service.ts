@@ -211,7 +211,7 @@ export class ProductService {
       await this.productRepository.update(res.id, res);
     }
 
-    return this.productRepository.createQueryBuilder("product")
+    const out = await this.productRepository.createQueryBuilder("product")
       .leftJoinAndSelect('product.masterProduct', 'masterProduct')
       .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
       .leftJoinAndSelect('masterProduct.suppliers', 'suppliers')
@@ -223,6 +223,16 @@ export class ProductService {
       .leftJoinAndSelect('product.zone', 'zone')
       .where('product.id = :id', { id: res.id })
       .getOne();
+
+    if (product?.receipt?.id != null) {
+      try {
+        await this.receiptsService.completeReceiptIfAllProductsTemporary(product.receipt.id);
+      } catch (err) {
+        this.logger.warn(`completeReceiptIfAllProductsTemporary: ${err}`);
+      }
+    }
+
+    return out;
   }
 
   async findListProductByMasterProductId(recommendProduct: RecommendProduct): Promise<ResponseDTO> {
@@ -661,6 +671,13 @@ export class ProductService {
 
     await this.productRepository.update(id, currentProduct);
     const updateProduct = await this.productRepository.findOne(id, { relations: ["masterProduct", "block", "rack", "receipt", "zone"] });
+    if (updateProduct?.receipt?.id != null) {
+      try {
+        await this.receiptsService.completeReceiptIfAllProductsTemporary(updateProduct.receipt.id);
+      } catch (err) {
+        this.logger.warn(`completeReceiptIfAllProductsTemporary: ${err}`);
+      }
+    }
     if (updateProduct) {
       return updateProduct;
     }

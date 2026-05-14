@@ -163,6 +163,29 @@ export class ReceiptsService {
     return res;
   }
 
+  /**
+   * When every product line on the receipt is TEMPORARY, mark the receipt COMPLETED (dock / tạm nhập xong).
+   */
+  async completeReceiptIfAllProductsTemporary(receiptId: number | null | undefined): Promise<void> {
+    if (receiptId == null || !Number.isFinite(Number(receiptId))) {
+      return;
+    }
+    const rid = Number(receiptId);
+    const receipt = await this.receiptRepository.findOne(rid, { relations: ['products'] });
+    if (!receipt?.products?.length) {
+      return;
+    }
+    const allTemporary = receipt.products.every((p) => p.status === ProductStatus.TEMPORARY);
+    if (!allTemporary) {
+      return;
+    }
+    if (receipt.status === ReceiptStatus.COMPLETED || receipt.status === ReceiptStatus.DISABLE) {
+      return;
+    }
+    await this.receiptRepository.update(rid, { status: ReceiptStatus.COMPLETED });
+    this.logger.log(`Receipt ${rid} set to COMPLETED (all lines TEMPORARY).`);
+  }
+
   async findOne(id: number) {
     this.logger.log(`Request to get Receipt: ${id}`);
 
