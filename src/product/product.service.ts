@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'fs';
 import readXlsxFile from 'read-excel-file/node';
 import { BlocksService } from 'src/blocks/blocks.service';
+import { Block } from 'src/blocks/entities/block.entity';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ScanType } from 'src/common/enums/scan-type.enum';
 import { IdsDTO } from 'src/common/list-id.dto';
@@ -470,9 +471,7 @@ export class ProductService {
     const productBeforeUpdate = await this.productRepository.findOne(id, { relations: ["masterProduct", "rack"] });
     if (!productBeforeUpdate) throw new HttpException('Not found product', HttpStatus.NOT_FOUND);
 
-    if (currentProduct.rackId)
-      currentProduct.rack = await this.racksService.findOne(currentProduct?.rackId);
-    else if (currentProduct.rackId === null) currentProduct.rack = null;
+    await this.resolveRackFromUpdateDto(currentProduct, productBeforeUpdate);
 
     if (currentProduct.receiptId)
       currentProduct.receipt = await this.receiptsService.findOne(currentProduct?.receiptId);
@@ -518,21 +517,45 @@ export class ProductService {
           }
         }
         // Original rack was not decremented when entering REALLOCATE; do not INCREMENT it here or capacity overflows.
-      } else if (productBeforeUpdate?.rack?.id !== currentProduct?.rack?.id) {
-        if (STATUS_UPDATE_CAPACITY_ARRAY.includes(currentProduct.status)) {
+      } else if (
+        productBeforeUpdate?.rack?.id != null &&
+        currentProduct?.rack?.id != null &&
+        Number(productBeforeUpdate.rack.id) !== Number(currentProduct.rack.id)
+      ) {
+        const newRackId = Number(currentProduct.rack.id);
+        const oldRackId = Number(productBeforeUpdate.rack.id);
+        if (Number.isFinite(newRackId) && newRackId > 0 && STATUS_UPDATE_CAPACITY_ARRAY.includes(currentProduct.status)) {
           await this.updateRackUsedCapacity(productBeforeUpdate.masterProduct.capacity,
-            currentProduct?.rack?.id, currentProduct?.totalQuantity, INCREMENT);
+            newRackId, currentProduct?.totalQuantity, INCREMENT);
         }
-        if (STATUS_UPDATE_CAPACITY_ARRAY.includes(productBeforeUpdate.status) && currentProduct.status !== ProductStatus.REALLOCATE) {
+        if (
+          Number.isFinite(oldRackId) &&
+          oldRackId > 0 &&
+          STATUS_UPDATE_CAPACITY_ARRAY.includes(productBeforeUpdate.status) &&
+          currentProduct.status !== ProductStatus.REALLOCATE
+        ) {
           await this.updateRackUsedCapacity(productBeforeUpdate.masterProduct.capacity,
-            productBeforeUpdate?.rack?.id, productBeforeUpdate.totalQuantity, DECREMENT);
+            oldRackId, productBeforeUpdate.totalQuantity, DECREMENT);
         }
       } else {
 
         if (productBeforeUpdate.status !== currentProduct.status) {
           if (currentProduct.status === ProductStatus.STORED && productBeforeUpdate.status === ProductStatus.REALLOCATE) {
             const capacity = productBeforeUpdate?.masterProduct?.capacity;
-            await this.updateRackUsedCapacity(capacity, productBeforeUpdate.idRackReallocate, productBeforeUpdate.totalQuantity, DECREMENT);
+            if (capacity != null) {
+              let decRackId = productBeforeUpdate.idRackReallocate;
+              if (decRackId == null || Number.isNaN(Number(decRackId)) || Number(decRackId) <= 0) {
+                decRackId = currentProduct?.rack?.id;
+              }
+              if (decRackId != null && !Number.isNaN(Number(decRackId)) && Number(decRackId) > 0) {
+                await this.updateRackUsedCapacity(
+                  capacity,
+                  Number(decRackId),
+                  productBeforeUpdate.totalQuantity,
+                  DECREMENT,
+                );
+              }
+            }
           } else if (STATUS_UPDATE_CAPACITY_ARRAY.includes(currentProduct.status) &&
             !STATUS_UPDATE_CAPACITY_ARRAY.includes(productBeforeUpdate.status)) {
             const capacity = productBeforeUpdate?.masterProduct?.capacity;
@@ -681,6 +704,7 @@ export class ProductService {
     delete currentProduct.rackId;
     delete currentProduct.supplierId;
     delete currentProduct.lostNumber;
+    delete currentProduct.locations;
 
     await this.productRepository.update(id, currentProduct);
     const updateProduct = await this.productRepository.findOne(id, { relations: ["masterProduct", "block", "rack", "receipt", "zone"] });
@@ -736,8 +760,13 @@ export class ProductService {
   }
 
   async updateRackUsedCapacity(masterCapacity: number, rackId: number, totalQuantity: number, typeUpdate: string) {
+    const rid = Number(rackId);
+    if (!Number.isFinite(rid) || rid <= 0) {
+      this.logger.warn(`updateRackUsedCapacity skipped: invalid rackId (${rackId})`);
+      return;
+    }
     const total = masterCapacity * totalQuantity;
-    const rack = await this.racksService.findOne(rackId);
+    const rack = await this.racksService.findOne(rid);
     if (!rack) throw new RpcException('Not found rack');
     if (typeUpdate === INCREMENT && rack?.capacity >= total + rack?.usedCapacity)
       rack.usedCapacity += total;
@@ -772,12 +801,11 @@ export class ProductService {
         throw new RpcException('Not found product');
       }
       const loc = updateProducts.locations[0];
-      const resolved = await this.racksService.findByBlockShelfAndRackCode(
-        loc.block,
-        loc.shelf,
-        loc.rack,
-        proSample.warehouseId,
-      );
+      const resolved = await this.racksService.resolveRackFromLocationHints(proSample.warehouseId, {
+        blockRef: String(loc.block).trim(),
+        shelfName: String(loc.shelf).trim(),
+        rackCode: String(loc.rack).trim(),
+      });
       if (!resolved) {
         throw new RpcException('Not found rack for block/shelf/rack in this warehouse');
       }
@@ -1001,10 +1029,40 @@ export class ProductService {
     responseScans.successList = res;
     responseScans.errorType = difference?.length > 0 ? 'INVALID_STATUS' : undefined;
 
-    if (scanProduct.rackCode) {
-      const rak = await this.racksService.findOneByCode(scanProduct.rackCode, scanProduct.warehouseId);
-      if (rak?.id) responseScans.rack = rak;
-      else throw new RpcException('Not found rack');
+    if (scanProduct.locations?.[0]) {
+      const loc = scanProduct.locations[0];
+      if (!scanProduct.warehouseId) {
+        throw new RpcException('warehouseId is required');
+      }
+      const rak = await this.racksService.resolveRackFromLocationHints(Number(scanProduct.warehouseId), {
+        blockRef: String(loc.block).trim(),
+        shelfName: String(loc.shelf).trim(),
+        rackCode: String(loc.rack).trim(),
+      });
+      if (rak?.id) {
+        responseScans.rack = rak;
+      } else {
+        throw new RpcException('Not found rack for block/shelf/rack in this warehouse');
+      }
+    } else if (
+      scanProduct.rackCode?.trim() ||
+      scanProduct.location?.trim() ||
+      scanProduct.blockRef?.trim() ||
+      scanProduct.shelfName?.trim()
+    ) {
+      if (!scanProduct.warehouseId) {
+        throw new RpcException('warehouseId is required');
+      }
+      const rak = await this.racksService.resolveRackFromLocationHints(Number(scanProduct.warehouseId), {
+        rackCode: (scanProduct.rackCode || scanProduct.location)?.trim(),
+        blockRef: scanProduct.blockRef?.trim(),
+        shelfName: scanProduct.shelfName?.trim(),
+      });
+      if (rak?.id) {
+        responseScans.rack = rak;
+      } else {
+        throw new RpcException('Not found rack');
+      }
     }
 
     return responseScans;
@@ -1202,6 +1260,113 @@ export class ProductService {
       }
     });
     return res;
+  }
+
+  private async resolveRackFromUpdateDto(
+    currentProduct: UpdateProductDto,
+    productBeforeUpdate: Product,
+  ): Promise<void> {
+    const warehouseId = Number(currentProduct.warehouseId ?? productBeforeUpdate.warehouseId);
+
+    const loc0 = currentProduct.locations?.[0];
+    if (
+      loc0?.block != null &&
+      String(loc0.block).trim() !== '' &&
+      loc0?.shelf != null &&
+      String(loc0.shelf).trim() !== '' &&
+      loc0?.rack != null &&
+      String(loc0.rack).trim() !== ''
+    ) {
+      const resolved = await this.racksService.resolveRackFromLocationHints(warehouseId, {
+        blockRef: String(loc0.block).trim(),
+        shelfName: String(loc0.shelf).trim(),
+        rackCode: String(loc0.rack).trim(),
+      });
+      if (resolved) {
+        currentProduct.rack = resolved;
+        return;
+      }
+      throw new RpcException('Not found rack for block/shelf/rack in this warehouse');
+    }
+
+    const rawBlock = currentProduct.block as Block | string | undefined;
+    const blockRef =
+      (currentProduct.blockRef != null && String(currentProduct.blockRef).trim()) ||
+      (typeof rawBlock === 'string' && rawBlock.trim()) ||
+      (typeof rawBlock === 'object' &&
+        rawBlock != null &&
+        rawBlock.name != null &&
+        String(rawBlock.name).trim()) ||
+      (typeof rawBlock === 'object' &&
+        rawBlock != null &&
+        rawBlock.code != null &&
+        String(rawBlock.code).trim()) ||
+      undefined;
+
+    const shelfName =
+      (currentProduct.shelfName != null && String(currentProduct.shelfName).trim()) ||
+      ((currentProduct.rack as Rack)?.shelf != null &&
+        String((currentProduct.rack as Rack).shelf?.name || '').trim()) ||
+      undefined;
+
+    const rackCodeField = currentProduct.rackCode != null ? String(currentProduct.rackCode).trim() : '';
+    const rackCodeFromNested =
+      (currentProduct.rack as Rack)?.code != null ? String((currentProduct.rack as Rack).code).trim() : '';
+    const rackCodeHint = rackCodeField || rackCodeFromNested;
+
+    if (
+      currentProduct.rackId === null &&
+      rackCodeField === '' &&
+      !rackCodeFromNested &&
+      !blockRef &&
+      !shelfName
+    ) {
+      currentProduct.rack = null;
+      return;
+    }
+
+    if (rackCodeField !== '' || shelfName || blockRef) {
+      const resolved = await this.racksService.resolveRackFromLocationHints(warehouseId, {
+        rackCode: rackCodeHint || undefined,
+        blockRef,
+        shelfName,
+      });
+      if (resolved) {
+        currentProduct.rack = resolved;
+        return;
+      }
+    }
+
+    if (currentProduct.rackId === null) {
+      currentProduct.rack = null;
+      return;
+    }
+
+    const directId =
+      currentProduct.rackId != null &&
+      String(currentProduct.rackId).trim() !== '' &&
+      Number.isFinite(Number(currentProduct.rackId)) &&
+      Number(currentProduct.rackId) > 0
+        ? Number(currentProduct.rackId)
+        : null;
+    if (directId != null) {
+      currentProduct.rack = await this.racksService.findOne(directId);
+      return;
+    }
+    const nestedId = currentProduct.rack?.id;
+    if (
+      nestedId != null &&
+      String(nestedId).trim() !== '' &&
+      Number.isFinite(Number(nestedId)) &&
+      Number(nestedId) > 0
+    ) {
+      currentProduct.rack = await this.racksService.findOne(Number(nestedId));
+      return;
+    }
+
+    if (rackCodeField !== '' || shelfName || blockRef) {
+      throw new RpcException('Not found rack');
+    }
   }
 
 }

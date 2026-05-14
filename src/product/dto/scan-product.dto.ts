@@ -1,4 +1,5 @@
 import { PaginationDto } from 'src/common/pagination.dto';
+import { ProductLocationLine } from './product-location.dto';
 
 export class ScanProduct extends PaginationDto {
   productCodes?: string[];
@@ -6,8 +7,10 @@ export class ScanProduct extends PaginationDto {
   packageCodes?: string[];
   barCodes?: string[];
   rackCode?: string;
-  /** Legacy single-code field from web clients */
   productCode?: string;
   location?: string;
   quantity?: number;
+  locations?: ProductLocationLine[];
+  blockRef?: string;
+  shelfName?: string;
 }

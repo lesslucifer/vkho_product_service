@@ -21,6 +21,8 @@ export class CreateProductDto {
   blockId: number;
   rackId: number;
   rackCode: string;
+  shelfName?: string;
+  blockRef?: string;
   receiptId: number;
   supplierId: number;
   zoneId: number;

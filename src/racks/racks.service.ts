@@ -198,6 +198,100 @@ export class RacksService {
     return rack ?? null;
   }
 
+  async resolveRackFromLocationHints(
+    warehouseId: number,
+    hints: { rackCode?: string; blockRef?: string; shelfName?: string },
+  ): Promise<Rack | null> {
+    const wid = Number(warehouseId);
+    if (!Number.isFinite(wid) || wid <= 0) {
+      return null;
+    }
+    const rackCode = hints.rackCode?.trim();
+    const blockRef = hints.blockRef?.trim();
+    const shelfName = hints.shelfName?.trim();
+
+    if (rackCode) {
+      const byCode = await this.rackRepository
+        .createQueryBuilder('rack')
+        .where('rack.code = :code', { code: rackCode })
+        .andWhere('rack.warehouseId = :wid', { wid })
+        .leftJoinAndSelect('rack.shelf', 'shelf')
+        .leftJoinAndSelect('shelf.block', 'block')
+        .getOne();
+      if (byCode) {
+        return byCode;
+      }
+    }
+
+    if (blockRef && shelfName && rackCode) {
+      const triple = await this.findByBlockShelfAndRackCode(blockRef, shelfName, rackCode, wid);
+      if (triple) {
+        return triple;
+      }
+    }
+
+    if (blockRef && shelfName) {
+      const byBlockShelf = await this.rackRepository
+        .createQueryBuilder('rack')
+        .leftJoinAndSelect('rack.shelf', 'shelf')
+        .leftJoinAndSelect('shelf.block', 'block')
+        .where('rack.warehouseId = :wid', { wid })
+        .andWhere('shelf.name = :shelfName', { shelfName })
+        .andWhere('(block.name = :blockRef OR block.code = :blockRef)', { blockRef })
+        .orderBy('rack.id', 'ASC')
+        .getOne();
+      if (byBlockShelf) {
+        return byBlockShelf;
+      }
+    }
+
+    if (blockRef && rackCode) {
+      const byBlockRack = await this.rackRepository
+        .createQueryBuilder('rack')
+        .leftJoinAndSelect('rack.shelf', 'shelf')
+        .leftJoinAndSelect('shelf.block', 'block')
+        .where('rack.warehouseId = :wid', { wid })
+        .andWhere('rack.code = :rackCode', { rackCode })
+        .andWhere('(block.name = :blockRef OR block.code = :blockRef)', { blockRef })
+        .orderBy('rack.id', 'ASC')
+        .getOne();
+      if (byBlockRack) {
+        return byBlockRack;
+      }
+    }
+
+    if (shelfName && rackCode) {
+      const byShelfRack = await this.rackRepository
+        .createQueryBuilder('rack')
+        .leftJoinAndSelect('rack.shelf', 'shelf')
+        .leftJoinAndSelect('shelf.block', 'block')
+        .where('rack.warehouseId = :wid', { wid })
+        .andWhere('shelf.name = :shelfName', { shelfName })
+        .andWhere('rack.code = :rackCode', { rackCode })
+        .getOne();
+      if (byShelfRack) {
+        return byShelfRack;
+      }
+    }
+
+    if (blockRef && rackCode) {
+      const rackAsShelfLabel = await this.rackRepository
+        .createQueryBuilder('rack')
+        .leftJoinAndSelect('rack.shelf', 'shelf')
+        .leftJoinAndSelect('shelf.block', 'block')
+        .where('rack.warehouseId = :wid', { wid })
+        .andWhere('shelf.name = :shelfName', { shelfName: rackCode })
+        .andWhere('(block.name = :blockRef OR block.code = :blockRef)', { blockRef })
+        .orderBy('rack.id', 'ASC')
+        .getOne();
+      if (rackAsShelfLabel) {
+        return rackAsShelfLabel;
+      }
+    }
+
+    return null;
+  }
+
   async update(id: number, currentRack: UpdateRackDto) {
     this.logger.log(`Request to update Rack: ${id}`);
     if (currentRack?.capacity === currentRack?.usedCapacity) currentRack.status = RackStatus.FULL;

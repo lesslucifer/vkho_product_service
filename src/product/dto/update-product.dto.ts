@@ -7,6 +7,7 @@ import { Supplier } from 'src/suppliers/entities/supplier.entity';
 import { Zone } from 'src/zone/entities/zone.entity';
 import { ProductStatus } from '../enum/product-status.enum';
 import { CreateProductDto } from './create-product.dto';
+import { ProductLocationLine } from './product-location.dto';
 
 export class UpdateProductDto extends PartialType(CreateProductDto) {
   id: number;
@@ -20,4 +21,5 @@ export class UpdateProductDto extends PartialType(CreateProductDto) {
   masterProduct: MasterProduct;
   block: Block;
   supplier: Supplier;
+  locations?: ProductLocationLine[];
 }
