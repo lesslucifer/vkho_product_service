@@ -309,8 +309,8 @@ export class ProductService {
     }
 
     if (productFilter.blockId) {
-      queryBuilder.leftJoinAndSelect('product.block', 'block5')
-      queryBuilder.andWhere("block5.id = :blockId", { blockId: productFilter.blockId })
+      queryBuilder.leftJoin('product.block', 'blockFilter');
+      queryBuilder.andWhere('blockFilter.id = :blockId', { blockId: productFilter.blockId });
     }
 
     if (productFilter.orderId) {
@@ -322,16 +322,17 @@ export class ProductService {
     }
 
     if (productFilter.masterProductId) {
-      queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct1')
-      queryBuilder.andWhere("masterProduct1.id = :masterProductId", { masterProductId: productFilter.masterProductId })
+      queryBuilder.leftJoin('product.masterProduct', 'masterProductIdFilter');
+      queryBuilder.andWhere('masterProductIdFilter.id = :masterProductId', { masterProductId: productFilter.masterProductId });
     }
 
     if (productFilter.keyword) {
       if (productFilter.keyword.startsWith(PRODUCT_CODE_PATTERN)) {
         queryBuilder.andWhere("product.code = :keyword", { keyword: productFilter.keyword })
-      } else
-        queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterproduct2')
-          .andWhere("masterProduct2.name LIKE :keyword", { keyword: `%${productFilter.keyword}%` })
+      } else {
+        queryBuilder.leftJoin('product.masterProduct', 'masterProductKeyword');
+        queryBuilder.andWhere('masterProductKeyword.name LIKE :keyword', { keyword: `%${productFilter.keyword}%` });
+      }
     }
 
     if (productFilter.packageCode) {
@@ -344,25 +345,25 @@ export class ProductService {
     }
 
     if (productFilter.productCategoryId) {
-      queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct3')
-      queryBuilder.leftJoinAndSelect('masterProduct3.productCategory', 'productCategory1')
-      queryBuilder.andWhere("productCategory1.id = :productCategoryId", { productCategoryId: productFilter.productCategoryId })
+      queryBuilder.leftJoin('product.masterProduct', 'masterProductCatFilter');
+      queryBuilder.leftJoin('masterProductCatFilter.productCategory', 'productCategoryFilter');
+      queryBuilder.andWhere('productCategoryFilter.id = :productCategoryId', { productCategoryId: productFilter.productCategoryId });
     }
 
     if (productFilter.supplierId) {
-      queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct4')
-      queryBuilder.leftJoinAndSelect('masterProduct4.suppliers', 'suppliers1')
-      queryBuilder.andWhere("suppliers1.id = :supplierId", { supplierId: productFilter.supplierId })
+      queryBuilder.leftJoin('product.masterProduct', 'masterProductSupFilter');
+      queryBuilder.leftJoin('masterProductSupFilter.suppliers', 'suppliersFilter');
+      queryBuilder.andWhere('suppliersFilter.id = :supplierId', { supplierId: productFilter.supplierId });
     }
 
     if (productFilter.rackId) {
-      queryBuilder.leftJoinAndSelect('product.rack', 'rack1')
-      queryBuilder.andWhere("rack1.id = :rackId", { rackId: productFilter.rackId })
+      queryBuilder.leftJoin('product.rack', 'rackIdFilter');
+      queryBuilder.andWhere('rackIdFilter.id = :rackId', { rackId: productFilter.rackId });
     }
 
     if (productFilter.rackCode) {
-      queryBuilder.leftJoinAndSelect('product.rack', 'rack2')
-      queryBuilder.andWhere("rack2.code = :rackCode", { rackCode: productFilter.rackCode })
+      queryBuilder.leftJoin('product.rack', 'rackCodeFilter');
+      queryBuilder.andWhere('rackCodeFilter.code = :rackCode', { rackCode: productFilter.rackCode });
     }
 
     if (productFilter.status) {
@@ -888,8 +889,8 @@ export class ProductService {
       }
 
       if (scanProduct.barCodes && scanProduct?.barCodes?.length > 0) {
-        queryBuilder.leftJoinAndSelect('product.masterProduct', 'masterProduct1');
-        queryBuilder.andWhere('masterProduct1.barCode IN (:...barCodes)', { barCodes: scanProduct.barCodes });
+        queryBuilder.leftJoin('product.masterProduct', 'masterProductBarFilter');
+        queryBuilder.andWhere('masterProductBarFilter.barCode IN (:...barCodes)', { barCodes: scanProduct.barCodes });
         queryBuilder.andWhere('product.status IN (:...status)', { status: [ProductStatus.PICKING] });
       }
 
@@ -1046,7 +1047,9 @@ export class ProductService {
     const queryBuilder = this.productRepository.createQueryBuilder('product')
       .leftJoinAndSelect('product.masterProduct', 'masterProduct')
       .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
+      .leftJoinAndSelect('masterProduct.suppliers', 'suppliers')
       .leftJoinAndSelect('product.rack', 'rack')
+      .leftJoinAndSelect('rack.shelf', 'shelf')
       .leftJoinAndSelect('product.block', 'block')
       .leftJoinAndSelect('product.zone', 'zone')
       .leftJoinAndSelect('product.supplier', 'supplier')
