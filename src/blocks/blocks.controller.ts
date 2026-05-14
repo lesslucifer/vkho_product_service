@@ -34,6 +34,11 @@ export class BlocksController {
     return this.blocksService.findOne(id);
   }
 
+  @MessagePattern(BLOCK_PATTERN.BLOCK_GET_SHELVES_WITH_RACKS)
+  findShelvesWithRacks(@Payload() id: number) {
+    return this.blocksService.findShelvesWithRacksByBlockId(id);
+  }
+
   @MessagePattern(BLOCK_PATTERN.BLOCK_UPDATE)
   update(@Payload() updateBlockDto: UpdateBlockDto) {
     return this.blocksService.update(updateBlockDto.id, updateBlockDto);

@@ -14,6 +14,7 @@ import { BlockFilter } from './dto/filter-block.dto';
 import { UpdateBlockDto } from './dto/update-block.dto';
 import { Block } from './entities/block.entity';
 import { BlockStatus } from './enums/block-status.enum';
+import { Shelf } from 'src/shelves/entities/shelf.entity';
 
 @Injectable()
 export class BlocksService {
@@ -101,6 +102,27 @@ export class BlocksService {
       return block;
     }
     throw new RpcException('Not found block');
+  }
+
+  /**
+   * All non-disabled shelves for a block, each with racks (matches block_get_all join depth for shelfs.racks).
+   */
+  async findShelvesWithRacksByBlockId(blockId: number): Promise<Shelf[]> {
+    const block = await this.blockRepository
+      .createQueryBuilder('block')
+      .leftJoinAndSelect('block.shelfs', 'shelfs', 'shelfs.status != :shelfStatus', {
+        shelfStatus: ShelfStatus.DISABLE,
+      })
+      .leftJoinAndSelect('shelfs.racks', 'racks')
+      .where('block.id = :blockId', { blockId })
+      .andWhere('block.status != :blockStatus', { blockStatus: BlockStatus.DISABLE })
+      .orderBy('shelfs.createDate', 'ASC')
+      .getOne();
+
+    if (!block) {
+      throw new RpcException('Not found block');
+    }
+    return block.shelfs ?? [];
   }
 
   async update(id: number, currentBlock: UpdateBlockDto) {
