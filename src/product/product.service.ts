@@ -32,7 +32,6 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateProducts } from './dto/update-products.dto';
 import { Product } from './entities/product.entity';
 import { ProductStatus } from './enum/product-status.enum';
-import { formatNewProductLotCode, productLotCodeStemForRelatedQuery } from './product-lot-code';
 
 @Injectable()
 export class ProductService {
@@ -125,7 +124,7 @@ export class ProductService {
     date.setDate(date.getDate() + newProduct?.masterProduct?.stogareTime)
     if (!date) res.storageDate = parseDate(new Date());
     else res.storageDate = date;
-    res.code = formatNewProductLotCode(res.warehouseId, res.id);
+    res.code = PRODUCT_CODE_PATTERN + res.id;
     const data = await this.productRepository.save(res);
     if (data) {
       if (data.masterProduct && data.status === ProductStatus.STORED) {
@@ -190,7 +189,10 @@ export class ProductService {
     } else {
 
 
-      const codeTemp = productLotCodeStemForRelatedQuery(product?.code);
+      let codeTemp = "";
+      if (product?.code?.includes("_")) {
+        codeTemp = product.code.split("_")[0];
+      } else codeTemp = product.code;
 
       const count = await this.productRepository.createQueryBuilder("product")
         .where("product.code LIKE :code", { code: `${codeTemp}%` })
@@ -556,7 +558,10 @@ export class ProductService {
 
     if (productBeforeUpdate.status === ProductStatus.ERROR && currentProduct.status !== ProductStatus.ERROR && currentProduct.status !== ProductStatus.LOST) {
 
-      const codeTemp = productLotCodeStemForRelatedQuery(productBeforeUpdate?.code);
+      let codeTemp = "";
+      if (productBeforeUpdate?.code?.includes("_")) {
+        codeTemp = productBeforeUpdate.code.split("_")[0];
+      } else codeTemp = productBeforeUpdate.code;
 
       const count = await this.productRepository.createQueryBuilder("product")
         .where("product.code LIKE :code", { code: `${codeTemp}%` })
@@ -600,7 +605,10 @@ export class ProductService {
     }
 
     if (productBeforeUpdate.status === ProductStatus.LOST && currentProduct.status !== ProductStatus.LOST && currentProduct.status !== ProductStatus.ERROR) {
-      const codeTemp = productLotCodeStemForRelatedQuery(productBeforeUpdate.code);
+      let codeTemp = "";
+      if (productBeforeUpdate.code.includes("_")) {
+        codeTemp = productBeforeUpdate.code.split("_")[0];
+      } else codeTemp = productBeforeUpdate.code;
       const count = await this.productRepository.createQueryBuilder("product")
         .where("product.code LIKE :code", { code: `${codeTemp}%` })
         .andWhere("product.status = :status", { status: ProductStatus.TEMPORARY })
