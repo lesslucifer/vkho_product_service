@@ -836,15 +836,29 @@ export class ProductService {
       scanProduct.type = ScanType.OUTBOUND_PICKING;
     }
 
-    // First check if products exist at all
+    // First check if products exist at all (REALLOCATE: allow match by line code OR master barCode)
     if (scanProduct.productCodes?.length > 0) {
-      const existingProducts = await this.productRepository.createQueryBuilder("product")
-        .where("product.code IN (:...codes)", { codes: scanProduct.productCodes })
-        .andWhere("product.warehouseId = :warehouseId", { warehouseId: scanProduct.warehouseId })
-        .getMany();
+      const existQb = this.productRepository
+        .createQueryBuilder('product')
+        .andWhere('product.warehouseId = :warehouseId', { warehouseId: scanProduct.warehouseId });
 
-      const existingCodes = existingProducts.map(p => p.code);
-      const nonExistentCodes = scanProduct.productCodes.filter(code => !existingCodes.includes(code));
+      if (scanProduct.type === ScanType.REALLOCATE) {
+        existQb.leftJoinAndSelect('product.masterProduct', 'mpExist');
+        existQb.andWhere('(product.code IN (:...codes) OR mpExist.barCode IN (:...codes))', {
+          codes: scanProduct.productCodes
+        });
+      } else {
+        existQb.andWhere('product.code IN (:...codes)', { codes: scanProduct.productCodes });
+      }
+
+      const existingProducts = await existQb.getMany();
+
+      const matchedTokens = new Set<string>();
+      for (const p of existingProducts) {
+        if (p.code) matchedTokens.add(p.code);
+        if (p.masterProduct?.barCode) matchedTokens.add(p.masterProduct.barCode);
+      }
+      const nonExistentCodes = scanProduct.productCodes.filter((code) => !matchedTokens.has(code));
 
       if (nonExistentCodes.length > 0) {
         const responseScans = new ProductScanResponse();
@@ -855,11 +869,18 @@ export class ProductService {
       }
     }
 
-    const queryBuilder = this.productRepository.createQueryBuilder("product");
+    const queryBuilder = this.productRepository.createQueryBuilder('product');
 
     if (scanProduct.type) {
       if (scanProduct.productCodes) {
-        queryBuilder.where("product.code IN (:...codes)", { codes: scanProduct.productCodes });
+        if (scanProduct.type === ScanType.REALLOCATE) {
+          queryBuilder.leftJoin('product.masterProduct', 'mpRel');
+          queryBuilder.where('(product.code IN (:...codes) OR mpRel.barCode IN (:...codes))', {
+            codes: scanProduct.productCodes
+          });
+        } else {
+          queryBuilder.where('product.code IN (:...codes)', { codes: scanProduct.productCodes });
+        }
       }
 
       if (scanProduct.packageCodes && scanProduct?.packageCodes?.length > 0) {
@@ -919,17 +940,17 @@ export class ProductService {
       .leftJoinAndSelect('product.zone', 'zone')
       .getMany();
 
-    const res = [];
-    const codes = [];
+    const matchedRequestTokens = new Set<string>();
     for (const element of data) {
-      codes.push(element.code);
+      if (element.code) matchedRequestTokens.add(element.code);
+      if (element.masterProduct?.barCode) matchedRequestTokens.add(element.masterProduct.barCode);
     }
-    const codePackages = [];
+    let difference = scanProduct?.productCodes?.filter((x) => !matchedRequestTokens.has(x));
+    const codePackages: string[] = [];
     for (const element of data) {
       codePackages.push(element.packageCode);
     }
-
-    let difference = scanProduct?.productCodes?.filter(x => !codes.includes(x));
+    const res = [];
     let differencePackage = scanProduct?.packageCodes?.filter(x => !codePackages.includes(x));
     const responseScans = new ProductScanResponse();
     for (const rep of data) {
