@@ -765,17 +765,37 @@ export class ProductService {
       this.logger.warn(`updateRackUsedCapacity skipped: invalid rackId (${rackId})`);
       return;
     }
-    const total = masterCapacity * totalQuantity;
+    const cap = Number(masterCapacity);
+    const qty = Number(totalQuantity);
+    if (!Number.isFinite(cap) || !Number.isFinite(qty) || qty < 0) {
+      this.logger.warn(
+        `updateRackUsedCapacity skipped: invalid capacity or quantity (capacity=${masterCapacity}, qty=${totalQuantity})`,
+      );
+      return;
+    }
+    const total = cap * qty;
+    if (!Number.isFinite(total) || total < 0) {
+      this.logger.warn(`updateRackUsedCapacity skipped: non-finite total (${total})`);
+      return;
+    }
     const rack = await this.racksService.findOne(rid);
     if (!rack) throw new RpcException('Not found rack');
-    if (typeUpdate === INCREMENT && rack?.capacity >= total + rack?.usedCapacity)
+
+    if (typeUpdate === INCREMENT && rack.capacity >= total + rack.usedCapacity) {
       rack.usedCapacity += total;
-    else if (typeUpdate === DECREMENT && rack?.usedCapacity >= total)
+      return await this.racksService.update(rack.id, rack);
+    }
+    if (typeUpdate === DECREMENT && rack.usedCapacity >= total) {
       rack.usedCapacity -= total;
-    else throw new RpcException('Not enough capacity');
-
-    return await this.racksService.update(rack?.id, rack);
-
+      return await this.racksService.update(rack.id, rack);
+    }
+    if (typeUpdate === DECREMENT && rack.usedCapacity < total) {
+      this.logger.warn(
+        `updateRackUsedCapacity: DECREMENT skipped for rack ${rid} (usedCapacity=${rack.usedCapacity} < volume=${total})`,
+      );
+      return rack;
+    }
+    throw new RpcException('Not enough capacity');
   }
 
   async removes(idsDTO: IdsDTO) {
