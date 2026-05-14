@@ -9,7 +9,7 @@ import { ScanType } from 'src/common/enums/scan-type.enum';
 import { IdsDTO } from 'src/common/list-id.dto';
 import { parseDate } from 'src/common/partDateTime';
 import { ResponseDTO } from 'src/common/response.dto';
-import { DECREMENT, INCREMENT, PRODUCT_CODE_PATTERN, STATUS_UPDATE_CAPACITY_ARRAY } from 'src/constants/product.constants';
+import { DECREMENT, INCREMENT, STATUS_UPDATE_CAPACITY_ARRAY } from 'src/constants/product.constants';
 import { MasterProductMethod } from 'src/master-products/enums/master-product-method';
 import { MasterProductsService } from 'src/master-products/master-products.service';
 import { ProductCategorysService } from 'src/product-categorys/product-categorys.service';
@@ -32,6 +32,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateProducts } from './dto/update-products.dto';
 import { Product } from './entities/product.entity';
 import { ProductStatus } from './enum/product-status.enum';
+import { formatNewProductLotCode, keywordMatchesProductCodeExactLookup, productLotCodeStemForRelatedQuery } from './product-lot-code';
 
 @Injectable()
 export class ProductService {
@@ -124,7 +125,7 @@ export class ProductService {
     date.setDate(date.getDate() + newProduct?.masterProduct?.stogareTime)
     if (!date) res.storageDate = parseDate(new Date());
     else res.storageDate = date;
-    res.code = PRODUCT_CODE_PATTERN + res.id;
+    res.code = formatNewProductLotCode(res.warehouseId, res.id);
     const data = await this.productRepository.save(res);
     if (data) {
       if (data.masterProduct && data.status === ProductStatus.STORED) {
@@ -189,16 +190,12 @@ export class ProductService {
     } else {
 
 
-      let codeTemp = "";
-      if (product?.code?.includes("_")) {
-        codeTemp = product.code.split("_")[0];
-      } else codeTemp = product.code;
+      const codeTemp = productLotCodeStemForRelatedQuery(product?.code);
 
       const count = await this.productRepository.createQueryBuilder("product")
         .where("product.code LIKE :code", { code: `${codeTemp}%` })
         .andWhere("product.status NOT IN (:...status)", { status: [ProductStatus.ERROR, ProductStatus.LOST, ProductStatus.DISABLE] })
         .getCount();
-      //   res.code = PRODUCT_CODE_PATTERN + res.id;
       // res.status = product.status;
       // await this.productRepository.update(res.id, res);
       if (product.code.includes("T")) {
@@ -337,7 +334,7 @@ export class ProductService {
     }
 
     if (productFilter.keyword) {
-      if (productFilter.keyword.startsWith(PRODUCT_CODE_PATTERN)) {
+      if (keywordMatchesProductCodeExactLookup(productFilter.keyword)) {
         queryBuilder.andWhere("product.code = :keyword", { keyword: productFilter.keyword })
       } else {
         queryBuilder.leftJoin('product.masterProduct', 'masterProductKeyword');
@@ -558,10 +555,7 @@ export class ProductService {
 
     if (productBeforeUpdate.status === ProductStatus.ERROR && currentProduct.status !== ProductStatus.ERROR && currentProduct.status !== ProductStatus.LOST) {
 
-      let codeTemp = "";
-      if (productBeforeUpdate?.code?.includes("_")) {
-        codeTemp = productBeforeUpdate.code.split("_")[0];
-      } else codeTemp = productBeforeUpdate.code;
+      const codeTemp = productLotCodeStemForRelatedQuery(productBeforeUpdate?.code);
 
       const count = await this.productRepository.createQueryBuilder("product")
         .where("product.code LIKE :code", { code: `${codeTemp}%` })
@@ -605,10 +599,7 @@ export class ProductService {
     }
 
     if (productBeforeUpdate.status === ProductStatus.LOST && currentProduct.status !== ProductStatus.LOST && currentProduct.status !== ProductStatus.ERROR) {
-      let codeTemp = "";
-      if (productBeforeUpdate.code.includes("_")) {
-        codeTemp = productBeforeUpdate.code.split("_")[0];
-      } else codeTemp = productBeforeUpdate.code;
+      const codeTemp = productLotCodeStemForRelatedQuery(productBeforeUpdate.code);
       const count = await this.productRepository.createQueryBuilder("product")
         .where("product.code LIKE :code", { code: `${codeTemp}%` })
         .andWhere("product.status = :status", { status: ProductStatus.TEMPORARY })

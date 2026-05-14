@@ -24,4 +24,6 @@ export const INCREMENT: string = "increment";
 export const DECREMENT: string = "decrement";
 
 export const PRODUCT_CODE_PATTERN = "PROD";
+
+export const PRODUCT_LOT_CODE_PREFIX = "PRD";
 export const STATUS_UPDATE_CAPACITY_ARRAY = [ProductStatus.STORED, ProductStatus.MOVING, ProductStatus.TEMPORARY];
