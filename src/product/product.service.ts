@@ -496,7 +496,29 @@ export class ProductService {
 
     if (currentProduct.status !== ProductStatus.ERROR && currentProduct.status !== ProductStatus.LOST
       && productBeforeUpdate.status !== ProductStatus.ERROR && productBeforeUpdate.status !== ProductStatus.LOST) {
-      if (productBeforeUpdate?.rack?.id !== currentProduct?.rack?.id) {
+      const revertReallocation =
+        productBeforeUpdate.status === ProductStatus.REALLOCATE &&
+        currentProduct.status === ProductStatus.STORED &&
+        productBeforeUpdate.idRackReallocate != null &&
+        !Number.isNaN(Number(productBeforeUpdate.idRackReallocate)) &&
+        Number(productBeforeUpdate.idRackReallocate) !== 0 &&
+        currentProduct?.rack?.id != null &&
+        productBeforeUpdate?.rack?.id != null &&
+        Number(currentProduct.rack.id) === Number(productBeforeUpdate.idRackReallocate) &&
+        Number(productBeforeUpdate.rack.id) !== Number(productBeforeUpdate.idRackReallocate);
+
+      if (revertReallocation) {
+        const cap = productBeforeUpdate.masterProduct?.capacity;
+        if (cap != null) {
+          const newRackId = productBeforeUpdate.rack.id;
+          const newRack = await this.racksService.findOne(newRackId);
+          const vol = cap * productBeforeUpdate.totalQuantity;
+          if (newRack && newRack.usedCapacity >= vol) {
+            await this.updateRackUsedCapacity(cap, newRackId, productBeforeUpdate.totalQuantity, DECREMENT);
+          }
+        }
+        // Original rack was not decremented when entering REALLOCATE; do not INCREMENT it here or capacity overflows.
+      } else if (productBeforeUpdate?.rack?.id !== currentProduct?.rack?.id) {
         if (STATUS_UPDATE_CAPACITY_ARRAY.includes(currentProduct.status)) {
           await this.updateRackUsedCapacity(productBeforeUpdate.masterProduct.capacity,
             currentProduct?.rack?.id, currentProduct?.totalQuantity, INCREMENT);
