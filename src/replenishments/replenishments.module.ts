@@ -3,13 +3,14 @@ import { ReplenishmentsService } from './replenishments.service';
 import { ReplenishmentsController } from './replenishments.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Replenishment } from './entities/replenishment.entity';
+import { ReplenishmentShortageSnapshot } from './entities/replenishment-shortage-snapshot.entity';
 import { ProductCategorysModule } from 'src/product-categorys/product-categorys.module';
 import { ProductModule } from 'src/product/product.module';
 import { MasterProductsModule } from 'src/master-products/master-products.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Replenishment]),
+    TypeOrmModule.forFeature([Replenishment, ReplenishmentShortageSnapshot]),
     forwardRef(() => ProductCategorysModule),
     forwardRef(() => ProductModule),
     forwardRef(() => MasterProductsModule)

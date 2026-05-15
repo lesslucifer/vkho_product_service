@@ -11,6 +11,7 @@ import { ReplenishmentFilter } from './dto/filter-replenishment.dto';
 import { ReplenishmentDTO } from './dto/response-replenishment.dto';
 import { UpdateReplenishmentDto } from './dto/update-replenishment.dto';
 import { Replenishment } from './entities/replenishment.entity';
+import { ReplenishmentShortageSnapshot } from './entities/replenishment-shortage-snapshot.entity';
 import { ReplenishmentStatus } from './enums/replenishment-status.enum';
 
 @Injectable()
@@ -21,6 +22,8 @@ export class ReplenishmentsService {
   constructor(
     @InjectRepository(Replenishment)
     private replenishmentRepository: Repository<Replenishment>,
+    @InjectRepository(ReplenishmentShortageSnapshot)
+    private readonly shortageSnapshotRepository: Repository<ReplenishmentShortageSnapshot>,
     @Inject(forwardRef(() => ProductCategorysService))
     private readonly productCategorysService: ProductCategorysService,
     @Inject(forwardRef(() => ProductService))
@@ -195,5 +198,143 @@ export class ReplenishmentsService {
     queryBuilder.andWhere("sup.productName = :name", { name: name?.trim() })
     const res = await queryBuilder.getCount();
     if (res > 0) throw new RpcException(`This ${name} name already exists`);
+  }
+
+  private computeToOrder(min: number, max: number, onHandTotal: number): number {
+    let toOrder = 0;
+    if (max >= onHandTotal && onHandTotal < min) {
+      toOrder = max - onHandTotal;
+    }
+    if (onHandTotal >= min) {
+      toOrder = 0;
+    }
+    return toOrder;
+  }
+
+  /**
+   * Nightly scan: ENABLE replenishments where onHand (same as getOnHandProductId) &lt; min.
+   * Persists rows for the current local server calendar day (replaces same-day rows if re-run).
+   */
+  async runShortageSnapshotScan(): Promise<{
+    scanDate: string;
+    totalCount: number;
+    newCount: number;
+    newItems: { replenishmentId: number; warehouseId: number; productName: string; shortageBelowMin: number }[];
+  }> {
+    const scanAt = new Date();
+    scanAt.setHours(0, 0, 0, 0);
+    const scanDate = `${scanAt.getFullYear()}-${String(scanAt.getMonth() + 1).padStart(2, '0')}-${String(
+      scanAt.getDate(),
+    ).padStart(2, '0')}`;
+
+    const prevMax = await this.shortageSnapshotRepository
+      .createQueryBuilder('s')
+      .select('MAX(s.scanDate)', 'maxDate')
+      .where('s.scanDate < :today', { today: scanDate })
+      .getRawOne<{ maxDate: string | null }>();
+
+    const prevIds = new Set<number>();
+    if (prevMax?.maxDate) {
+      const prevRows = await this.shortageSnapshotRepository.find({
+        where: { scanDate: prevMax.maxDate },
+        select: ['replenishmentId'],
+      });
+      prevRows.forEach((r) => prevIds.add(r.replenishmentId));
+    }
+
+    await this.shortageSnapshotRepository.delete({ scanDate });
+
+    const reps = await this.replenishmentRepository.find({
+      where: { status: ReplenishmentStatus.ENABLE },
+      relations: ['masterProduct', 'masterProduct.suppliers', 'masterProduct.productCategory', 'productCategory'],
+    });
+
+    const rows: ReplenishmentShortageSnapshot[] = [];
+    for (const rep of reps) {
+      const masterProductId = rep.masterProduct?.id;
+      if (!masterProductId) {
+        continue;
+      }
+      const onHandRaw = await this.productService.getOnHandProductId(masterProductId, rep.warehouseId);
+      const onHand = Number(onHandRaw?.value) || 0;
+      if (onHand >= rep.min) {
+        continue;
+      }
+
+      const toOrder = this.computeToOrder(rep.min, rep.max, onHand);
+      const shortageBelowMin = Math.max(0, rep.min - onHand);
+      const mp = rep.masterProduct;
+      const supplierName = mp?.suppliers?.length ? mp.suppliers[0].name : null;
+      const category = mp?.productCategory || rep.productCategory;
+
+      const snap = this.shortageSnapshotRepository.create({
+        scanDate,
+        replenishmentId: rep.id,
+        warehouseId: rep.warehouseId,
+        masterProductId,
+        productCode: mp?.code ?? null,
+        productName: rep.productName,
+        categoryId: category?.id ?? null,
+        categoryName: category?.name ?? null,
+        supplierName,
+        min: rep.min,
+        max: rep.max,
+        onHand,
+        toOrder,
+        shortageBelowMin,
+        isNewSincePreviousScan: prevIds.size === 0 ? false : !prevIds.has(rep.id),
+      });
+      rows.push(snap);
+    }
+
+    if (rows.length) {
+      await this.shortageSnapshotRepository.save(rows);
+    }
+
+    const newItems = rows
+      .filter((r) => r.isNewSincePreviousScan)
+      .map((r) => ({
+        replenishmentId: r.replenishmentId,
+        warehouseId: r.warehouseId,
+        productName: r.productName,
+        shortageBelowMin: r.shortageBelowMin,
+      }));
+
+    this.logger.log(
+      `Shortage snapshot scan ${scanDate}: ${rows.length} below min, ${newItems.length} newly below vs previous scan`,
+    );
+
+    return {
+      scanDate,
+      totalCount: rows.length,
+      newCount: newItems.length,
+      newItems,
+    };
+  }
+
+  async getShortageSnapshot(filter: { warehouseId?: number; scanDate?: string }): Promise<{
+    scanDate: string | null;
+    alerts: ReplenishmentShortageSnapshot[];
+  }> {
+    let targetDate = filter.scanDate?.trim();
+    if (!targetDate) {
+      const row = await this.shortageSnapshotRepository
+        .createQueryBuilder('s')
+        .select('MAX(s.scanDate)', 'maxDate')
+        .getRawOne<{ maxDate: string | null }>();
+      targetDate = row?.maxDate || null;
+    }
+    if (!targetDate) {
+      return { scanDate: null, alerts: [] };
+    }
+    const qb = this.shortageSnapshotRepository
+      .createQueryBuilder('s')
+      .where('s.scanDate = :scanDate', { scanDate: targetDate })
+      .orderBy('s.productName', 'ASC');
+    if (filter.warehouseId != null && !Number.isNaN(Number(filter.warehouseId))) {
+      qb.andWhere('s.warehouseId = :warehouseId', { warehouseId: Number(filter.warehouseId) });
+    }
+    const alerts = await qb.getMany();
+    return { scanDate: targetDate, alerts };
   }
 }
