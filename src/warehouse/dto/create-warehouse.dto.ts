@@ -4,4 +4,5 @@ export class CreateWarehouseDto {
     acreage: number;
     userIds: string[];
     warehouseGroupId?: number;
+    logoUrl?: string;
 }

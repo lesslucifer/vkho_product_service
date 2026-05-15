@@ -31,6 +31,9 @@ export class Warehouse {
     @Column({ nullable: true })
     warehouseGroupId: number;
 
+    @Column({ nullable: true })
+    logoUrl: string;
+
     @BeforeInsert()
     private beforeInsert() {
       this.status = WarehouseStatus.ENABLE;
