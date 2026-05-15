@@ -598,6 +598,28 @@ export class ProductService {
       }
     }
 
+    if (currentProduct.status === ProductStatus.LOST) {
+      if (currentProduct.lostNumber > 0 && currentProduct.lostNumber < productBeforeUpdate.totalQuantity) {
+        const splitProduct = new SplitProduct();
+        splitProduct.id = currentProduct.id;
+        splitProduct.quantity = currentProduct.lostNumber;
+        splitProduct.isUpdateCode = true;
+        const split = await this.splitProduct(splitProduct);
+        split.status = ProductStatus.LOST;
+        split.description = currentProduct.description;
+        split.lostDate =
+          currentProduct.lostDate != null
+            ? parseDate(new Date(currentProduct.lostDate as unknown as string))
+            : parseDate(new Date());
+        await this.productRepository.update(split.id, split);
+        currentProduct.status = productBeforeUpdate.status;
+        currentProduct.description = '';
+        currentProduct.totalQuantity = productBeforeUpdate.totalQuantity - currentProduct.lostNumber;
+        if (productBeforeUpdate?.rack?.id)
+          await this.updateRackUsedCapacity(productBeforeUpdate?.masterProduct?.capacity, productBeforeUpdate?.rack?.id, currentProduct.lostNumber, DECREMENT);
+      }
+    }
+
     if (productBeforeUpdate.status === ProductStatus.ERROR && currentProduct.status !== ProductStatus.ERROR && currentProduct.status !== ProductStatus.LOST) {
 
       const codeTemp = productLotCodeStemForRelatedQuery(productBeforeUpdate?.code);
