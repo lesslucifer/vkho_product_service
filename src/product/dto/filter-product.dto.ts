@@ -11,6 +11,7 @@ export class ProductFilter extends PaginationDto {
   status: ProductStatus;
   packageCode: string;
   productCategoryId: number;
+  productCategoryIds: string;
   supplierId: number;
   multipleStatus: string;
   rackId: number;

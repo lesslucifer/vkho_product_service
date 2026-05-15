@@ -352,10 +352,21 @@ export class ProductService {
       queryBuilder.andWhere("product.status IN (:...statusArr)", { statusArr: statusArr })
     }
 
-    if (productFilter.productCategoryId) {
+    const categoryIds: number[] = [];
+    const rawCategoryIds = productFilter.productCategoryIds;
+    if (rawCategoryIds != null && String(rawCategoryIds).trim() !== '') {
+      for (const part of String(rawCategoryIds).split(',')) {
+        const n = Number(part.trim());
+        if (Number.isFinite(n) && n > 0) categoryIds.push(n);
+      }
+    } else if (productFilter.productCategoryId != null) {
+      const n = Number(productFilter.productCategoryId);
+      if (Number.isFinite(n) && n > 0) categoryIds.push(n);
+    }
+    if (categoryIds.length > 0) {
       queryBuilder.leftJoin('product.masterProduct', 'masterProductCatFilter');
       queryBuilder.leftJoin('masterProductCatFilter.productCategory', 'productCategoryFilter');
-      queryBuilder.andWhere('productCategoryFilter.id = :productCategoryId', { productCategoryId: productFilter.productCategoryId });
+      queryBuilder.andWhere('productCategoryFilter.id IN (:...categoryIds)', { categoryIds });
     }
 
     if (productFilter.supplierId) {
