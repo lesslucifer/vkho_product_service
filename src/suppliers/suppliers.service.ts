@@ -4,7 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as moment from 'moment';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ResponseDTO } from 'src/common/response.dto';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { SUPPLIER_CODE_PATTERN } from 'src/constants/supplier.constants';
+import { ProductStatus } from 'src/product/enum/product-status.enum';
 import { MasterProductFilter } from 'src/master-products/dto/filter-master-product.dto';
 import { MasterProductsService } from 'src/master-products/master-products.service';
 import { ProductCategory } from 'src/product-categorys/entities/product-category.entity';
@@ -177,7 +179,7 @@ export class SuppliersService {
       masterProductFilers.supplierId = id;
       const masterProductTmp = await this.materProductsService.findAll(masterProductFilers);
       if (masterProductTmp?.data?.length > 0) {
-        throw new RpcException('Cannot disable!');
+        throw new RpcException(DATA_STILL_IN_WAREHOUSE);
       }
       updateSupplier.productCategorys = productCategorys;
       updateSupplier.updateDate = parseDate(new Date());
@@ -193,9 +195,21 @@ export class SuppliersService {
   async remove(id: number) {
     this.logger.log(`Request to remove Supplier: ${id}`);
 
-    const deleteResponse = await this.supplierRepository.findOne(id);
+    const deleteResponse = await this.supplierRepository.findOne(id, { relations: ['receipts'] });
     if (!deleteResponse) {
       throw new RpcException('Not found supplier');
+    }
+    if (deleteResponse.receipts?.length > 0) {
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
+    }
+    const productFilter = new ProductFilter();
+    productFilter.supplierId = id;
+    const linkedProducts = await this.productService.findAll(productFilter);
+    const hasWarehouseProducts = linkedProducts?.data?.some(
+      (product) => product.status !== ProductStatus.DISABLE && (product.totalQuantity ?? 0) > 0,
+    );
+    if (hasWarehouseProducts) {
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
     deleteResponse.status = SupplierStatus.DISABLE;
     this.supplierRepository.save(deleteResponse);

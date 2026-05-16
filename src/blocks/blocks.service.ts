@@ -7,6 +7,7 @@ import { BLOCK_CODE_PATTERN } from 'src/constants/block.constants';
 import { UpdateShelfDto } from 'src/shelves/dto/update-shelf.dto';
 import { ShelfStatus } from 'src/shelves/enum/shelf-status.enum';
 import { ShelfService } from 'src/shelves/shelf.service';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { Repository } from 'typeorm';
 import { AddUserToBlock } from './dto/add-user-block.dto';
 import { CreateBlockDto } from './dto/create-block.dto';
@@ -145,7 +146,7 @@ export class BlocksService {
     if (!deleteResponse) {
       throw new RpcException('Not found block');
     }
-    if (deleteResponse?.products?.length > 0) throw new RpcException('Cannot delete block');
+    if (deleteResponse?.products?.length > 0) throw new RpcException(DATA_STILL_IN_WAREHOUSE);
 
     if (deleteResponse.shelfs) {
       for (const shelf of deleteResponse.shelfs) {

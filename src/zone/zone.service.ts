@@ -2,7 +2,9 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ResponseDTO } from 'src/common/response.dto';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { ZONE_CODE_PATTERN } from 'src/constants/zone.constants';
+import { ProductStatus } from 'src/product/enum/product-status.enum';
 import { Repository } from 'typeorm';
 import { CreateZoneDto } from './dto/create-zone.dto';
 import { ZoneFilter } from './dto/filter-zone.dto';
@@ -105,9 +107,15 @@ export class ZoneService {
   async remove(id: number) {
     this.logger.log(`Request to remove Zone: ${id}`);
 
-    const deleteResponse = await this.zoneRepository.findOne(id);
+    const deleteResponse = await this.zoneRepository.findOne(id, { relations: ['products'] });
     if (!deleteResponse) {
       throw new RpcException('Not found zone');
+    }
+    const hasActiveProducts = deleteResponse.products?.some(
+      (product) => product.status !== ProductStatus.DISABLE && (product.totalQuantity ?? 0) > 0,
+    );
+    if (hasActiveProducts) {
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
     deleteResponse.status = ZoneStatus.DISABLE;
     this.zoneRepository.save(deleteResponse);

@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import moment from 'moment';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ResponseDTO } from 'src/common/response.dto';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { PARENT_PRODUCT_CATEGORY_CODE_PATTERN } from 'src/constants/parent-product-category.constants';
 import { DivisonService } from 'src/divison/divison.service';
 import { MasterProductFilter } from 'src/master-products/dto/filter-master-product.dto';
@@ -248,7 +249,7 @@ export class ParentProductCategorysService {
     });
     if(flag == 1)
     {
-      throw new RpcException('Cannot disable!');
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
 
     const deleteResponse = await this.parentProductCategoryRepository.findOne(id);
@@ -257,7 +258,7 @@ export class ParentProductCategorysService {
     const productMasterTemp = await this.masterProductService.findAll(masterProductFilters);
     if(productMasterTemp?.data?.length != 0)
     {
-      throw new RpcException('Cannot disable!');
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
     if (!deleteResponse) {
       throw new RpcException('Not found product category');

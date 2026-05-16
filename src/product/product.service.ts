@@ -10,6 +10,7 @@ import { ScanType } from 'src/common/enums/scan-type.enum';
 import { IdsDTO } from 'src/common/list-id.dto';
 import { parseDate } from 'src/common/partDateTime';
 import { ResponseDTO } from 'src/common/response.dto';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { DECREMENT, INCREMENT, STATUS_UPDATE_CAPACITY_ARRAY } from 'src/constants/product.constants';
 import { MasterProductMethod } from 'src/master-products/enums/master-product-method';
 import { MasterProductsService } from 'src/master-products/master-products.service';
@@ -780,15 +781,16 @@ export class ProductService {
 
     if (!product) {
       throw new RpcException('Not found product');
-    } else {
-      product.status = ProductStatus.DISABLE;
-      await this.productRepository.save(product);
-      if (product?.rack) {
-        const rack = product?.rack;
-        const master = product?.masterProduct?.capacity;
-        this.updateRackUsedCapacity(master, rack?.id, product?.totalQuantity, DECREMENT);
-      }
-
+    }
+    if ((product.totalQuantity ?? 0) > 0) {
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
+    }
+    product.status = ProductStatus.DISABLE;
+    await this.productRepository.save(product);
+    if (product?.rack) {
+      const rack = product?.rack;
+      const master = product?.masterProduct?.capacity;
+      this.updateRackUsedCapacity(master, rack?.id, product?.totalQuantity, DECREMENT);
     }
   }
 

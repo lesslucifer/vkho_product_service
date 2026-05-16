@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CreateShelfDto } from 'src/shelves/dto/create-shelf.dto';
 import { UpdateShelfDto } from 'src/shelves/dto/update-shelf.dto';
 import { Shelf } from './entities/shelf.entity';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { SHELF_CODE_PATTERN } from 'src/constants/shelves.constants';
 import { ProductCategorysService } from 'src/product-categorys/product-categorys.service';
 import { BlocksService } from 'src/blocks/blocks.service';
@@ -263,7 +264,7 @@ export class ShelfService {
       for (const rack of deleteResponse.racks) {
         filterProduct.rackId = rack.id;
         const existedData = await this.productService.findAll(filterProduct);
-        if (existedData?.data?.length > 0) throw new RpcException('Cannot delete shelf');
+        if (existedData?.data?.length > 0) throw new RpcException(DATA_STILL_IN_WAREHOUSE);
       }
       for (const rack of deleteResponse.racks) {
         rack.status = RackStatus.DISABLE;

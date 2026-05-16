@@ -11,6 +11,7 @@ import { ProductFilter } from 'src/product/dto/filter-product.dto';
 import { ProductService } from 'src/product/product.service';
 import { ShelfStatus } from 'src/shelves/enum/shelf-status.enum';
 import { ShelfService } from 'src/shelves/shelf.service';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { Repository } from 'typeorm';
 import { CreateRackDto } from './dto/create-rack.dto';
 import { RackFilter } from './dto/filter-rack.dto';
@@ -322,7 +323,7 @@ export class RacksService {
       throw new RpcException('Not found rack');
     }
 
-    if (deleteResponse?.products?.length > 0) throw new RpcException('Cannot delete rack');
+    if (deleteResponse?.products?.length > 0) throw new RpcException(DATA_STILL_IN_WAREHOUSE);
 
     deleteResponse.status = RackStatus.DISABLE;
     this.rackRepository.save(deleteResponse);

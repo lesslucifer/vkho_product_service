@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { RpcException } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError, In, Not } from 'typeorm';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { CreateBomDto } from './dto/create-bom.dto';
 import { Bom } from './entities/bom.entity';
 import { BomComponent } from 'src/bom-component/entities/bom-component.entity';
@@ -477,7 +478,7 @@ export class BomService {
         if (error.message.includes('violates foreign key constraint')) {
           throw new RpcException({
             status: 400,
-            message: 'Cannot delete BOM as it is referenced by other records',
+            message: DATA_STILL_IN_WAREHOUSE,
             error: 'Bad Request'
           });
         }

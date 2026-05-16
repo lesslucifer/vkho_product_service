@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import moment from 'moment';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ResponseDTO } from 'src/common/response.dto';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { PRODUCT_CATEGORY_CODE_PATTERN } from 'src/constants/product-category.constants';
 import { MasterProductFilter } from 'src/master-products/dto/filter-master-product.dto';
 import { MasterProductsService } from 'src/master-products/master-products.service';
@@ -198,12 +199,12 @@ export class ProductCategorysService {
     const suppliersFilers = new SupplierFilter();
     suppliersFilers.productCategoryId = id;
     const categoryTemp = await this.suppliersService.findAll(suppliersFilers);
-    if (categoryTemp?.data?.length > 0) throw new RpcException('Cannot disable!');
+    if (categoryTemp?.data?.length > 0) throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     
     let masterProductFilters = new MasterProductFilter();
     masterProductFilters.productCategoryId = id;
     const productMasterTemp = await this.masterProductService.findAll(masterProductFilters);
-    if(productMasterTemp?.data?.length > 0) throw new RpcException('Cannot disable!');
+    if(productMasterTemp?.data?.length > 0) throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     
     let flagShelf = 0;
     const sshelfFilers = new ShelfFilter;
@@ -216,7 +217,7 @@ export class ProductCategorysService {
     });
     if(flagShelf == 1)
     {
-      throw new RpcException('Cannot disable!');
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
   }
     currentProductCategory.updateDate = parseDate(new Date());
@@ -244,7 +245,7 @@ export class ProductCategorysService {
     });
     if(flag == 1)
     {
-      throw new RpcException('Cannot disable!');
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
 
     const deleteResponse = await this.productCategoryRepository.findOne(id);
@@ -253,7 +254,7 @@ export class ProductCategorysService {
     const productMasterTemp = await this.masterProductService.findAll(masterProductFilters);
     if(productMasterTemp?.data?.length != 0)
     {
-      throw new RpcException('Cannot disable!');
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
     if (!deleteResponse) {
       throw new RpcException('Not found product category');

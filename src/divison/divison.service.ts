@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import moment from 'moment';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ResponseDTO } from 'src/common/response.dto';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { DIVISON_CODE_PATTERN } from 'src/constants/divison.constants';
 import { PARENT_PRODUCT_CATEGORY_CODE_PATTERN } from 'src/constants/parent-product-category.constants';
 import { MasterProductFilter } from 'src/master-products/dto/filter-master-product.dto';
@@ -175,12 +176,12 @@ export class DivisonService {
       const suppliersFilers = new SupplierFilter();
       suppliersFilers.productCategoryId = id;
       const categoryTemp = await this.suppliersService.findAll(suppliersFilers);
-      if (categoryTemp?.data?.length > 0) throw new RpcException('Cannot disable!');
+      if (categoryTemp?.data?.length > 0) throw new RpcException(DATA_STILL_IN_WAREHOUSE);
 
       let masterProductFilters = new MasterProductFilter();
       masterProductFilters.productCategoryId = id;
       const productMasterTemp = await this.masterProductService.findAll(masterProductFilters);
-      if (productMasterTemp?.data?.length > 0) throw new RpcException('Cannot disable!');
+      if (productMasterTemp?.data?.length > 0) throw new RpcException(DATA_STILL_IN_WAREHOUSE);
 
       let flagShelf = 0;
       const sshelfFilers = new ShelfFilter;
@@ -191,7 +192,7 @@ export class DivisonService {
         }
       });
       if (flagShelf == 1) {
-        throw new RpcException('Cannot disable!');
+        throw new RpcException(DATA_STILL_IN_WAREHOUSE);
       }
     }
     currentProductCategory.updateDate = parseDate(new Date());
@@ -213,7 +214,7 @@ export class DivisonService {
         flag = 1;
     });
     if (flag == 1) {
-      throw new RpcException('Cannot disable!');
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
 
     const deleteResponse = await this.divisonRepository.findOne(id);
@@ -221,7 +222,7 @@ export class DivisonService {
     masterProductFilters.productCategoryId = id;
     const productMasterTemp = await this.masterProductService.findAll(masterProductFilters);
     if (productMasterTemp?.data?.length != 0) {
-      throw new RpcException('Cannot disable!');
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
     }
     if (!deleteResponse) {
       throw new RpcException('Not found divison');

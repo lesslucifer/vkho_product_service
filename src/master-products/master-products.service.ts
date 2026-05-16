@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import readXlsxFile from 'read-excel-file/node';
 import { BufferedFile } from 'src/common/buffered-file.dto';
 import { ResponseDTO } from 'src/common/response.dto';
+import { DATA_STILL_IN_WAREHOUSE } from 'src/constants/delete-error.constants';
 import { MASTER_PRODUCT_CODE_PATTERN_NONERESOURCE, MASTER_PRODUCT_CODE_PATTERN_RESOURCE } from 'src/constants/master-product.constants';
 import { ProductCategorysService } from 'src/product-categorys/product-categorys.service';
 import { ProductFilter } from 'src/product/dto/filter-product.dto';
@@ -432,6 +433,12 @@ export class MasterProductsService {
 
   async remove(id: number) {
     this.logger.log(`Request to remove MasterProduct: ${id}`);
+    const productFilter = new ProductFilter();
+    productFilter.masterProductId = id;
+    const linkedProducts = await this.productService.findAll(productFilter);
+    if (linkedProducts?.data?.length > 0) {
+      throw new RpcException(DATA_STILL_IN_WAREHOUSE);
+    }
     const deleteResponse = await this.masterProductRepository.delete(id);
     if (!deleteResponse.affected) {
       throw new RpcException('Not found MasterProduct');
