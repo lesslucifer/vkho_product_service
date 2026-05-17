@@ -134,6 +134,12 @@ export class WarehouseService {
 
   async update(id: number, currentWarehouse: UpdateWarehouseDto) {
     this.logger.log(`Request to update Warehouse: ${id}`);
+
+    const existing = await this.warehouseRepository.findOne(id);
+    if (!existing) {
+      throw new RpcException('Not found warehouse');
+    }
+
     if (currentWarehouse.status === WarehouseStatus.DISABLE) {
       const pros = new ProductFilter();
       pros.warehouseId = id;
@@ -143,12 +149,57 @@ export class WarehouseService {
       }
     }
 
-    await this.warehouseRepository.update(id, currentWarehouse);
+    if (currentWarehouse.warehouseGroupId) {
+      try {
+        await this.warehouseGroupService.findOne(currentWarehouse.warehouseGroupId);
+      } catch {
+        throw new RpcException('Warehouse group not found');
+      }
+    }
+
+    const { id: _dtoId, ...fields } = currentWarehouse;
+    const updatePayload: Partial<Warehouse> = { ...fields };
+
+    if (updatePayload.logoUrl !== undefined) {
+      updatePayload.logoUrl = this.normalizeLogoUrl(updatePayload.logoUrl);
+    }
+
+    if (updatePayload.userIds) {
+      updatePayload.userIds = updatePayload.userIds.map((entry) =>
+        typeof entry === 'object' && entry !== null && 'id' in (entry as object)
+          ? String((entry as { id: string | number }).id)
+          : String(entry),
+      );
+    }
+
+    try {
+      await this.warehouseRepository.update(id, updatePayload);
+    } catch (e) {
+      this.logger.error(`Warehouse update failed for id=${id}: ${e?.message}`, e?.stack);
+      throw new RpcException(e?.message || 'Failed to update warehouse');
+    }
+
     const updateWarehouse = await this.warehouseRepository.findOne(id);
     if (updateWarehouse) {
       return updateWarehouse;
     }
     throw new RpcException('Not found warehouse');
+  }
+
+  private normalizeLogoUrl(logoUrl?: string | null): string | null {
+    if (logoUrl == null || !String(logoUrl).trim()) {
+      return null;
+    }
+    const value = String(logoUrl).trim();
+    if (value.startsWith('data:')) {
+      throw new RpcException(
+        'Invalid logoUrl: upload the image via POST /file-upload and use the returned URL',
+      );
+    }
+    if (value.length > 4096) {
+      throw new RpcException('logoUrl is too long');
+    }
+    return value;
   }
 
   async remove(id: number) {

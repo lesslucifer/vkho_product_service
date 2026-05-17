@@ -31,7 +31,7 @@ export class Warehouse {
     @Column({ nullable: true })
     warehouseGroupId: number;
 
-    @Column({ nullable: true })
+    @Column({ type: 'text', nullable: true })
     logoUrl: string;
 
     @BeforeInsert()
