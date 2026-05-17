@@ -217,7 +217,7 @@ export class WarehouseService {
       this.logger.error(`Warehouse logo update failed for id=${id}: ${message}`, e?.stack);
       if (/logoUrl|logo_url/i.test(message)) {
         throw new RpcException(
-          'Database column logoUrl is missing. Run scripts/add-warehouse-logo-url.sql on product DB',
+          'Database column logoUrl is missing. Restart product-service to apply startup migration or run scripts/add-warehouse-logo-url.sql',
         );
       }
       throw new RpcException(message || 'Failed to update warehouse logo');
