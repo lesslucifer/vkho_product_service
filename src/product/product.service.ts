@@ -25,10 +25,12 @@ import { Repository } from 'typeorm';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductFilter } from './dto/filter-product.dto';
 import { RackProductDTO } from './dto/rack-product.dto';
+import { RecommendBatchEntry, RecommendBatchRequest, RecommendBatchResponse, RecommendBatchSuggestion } from './dto/recommend-batch.dto';
 import { RecommendProduct } from './dto/recommend-product.dto';
 import { ProductDTO, ProductScanResponse } from './dto/response-product.dto';
 import { ScanProduct } from './dto/scan-product.dto';
 import { SplitProduct } from './dto/split-product.dto';
+import { SuggestLocationItem, SuggestLocationProduct } from './dto/suggest-location.dto';
 import { UpdateLocationProduct } from './dto/update-location-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateProducts } from './dto/update-products.dto';
@@ -303,6 +305,64 @@ export class ProductService {
     res.data = dataRecommend;
     res.totalItem = count;
     return res;
+  }
+
+  /**
+   * Batch recommend: aggregate available bins for many masterProductIds in
+   * one round-trip. Avoids the N sequential HTTP requests the SPA was making.
+   *
+   * Frontend contract:
+   *   POST /products/recommend-batch
+   *   body: { warehouseId, items: [{ masterProductId, quantity? }] }
+   *   returns: { warehouseId, results: [{ masterProductId, suggestedLocations[], totalAvailable }] }
+   */
+  async recommendBatch(payload: RecommendBatchRequest): Promise<RecommendBatchResponse> {
+    this.logger.log(`Request to recommend batch: ${payload?.items?.length || 0} items, wh=${payload?.warehouseId}`);
+    const response: RecommendBatchResponse = {
+      warehouseId: payload?.warehouseId,
+      results: [],
+    };
+    if (!payload?.items?.length) {
+      return response;
+    }
+
+    for (const item of payload.items) {
+      if (item?.masterProductId == null) {
+        continue;
+      }
+      const entry: RecommendBatchEntry = {
+        masterProductId: Number(item.masterProductId),
+        requestedQuantity: item.quantity,
+        totalAvailable: 0,
+        suggestedLocations: [],
+      };
+
+      const sub = await this.findListProductByMasterProductId({
+        masterProductId: Number(item.masterProductId),
+        quantity: item.quantity,
+        warehouseId: payload.warehouseId,
+        page: 1,
+        limit: 1000,
+      });
+
+      const list: Product[] = Array.isArray(sub?.data) ? (sub.data as Product[]) : [];
+      for (const p of list) {
+        const suggestion: RecommendBatchSuggestion = {
+          productId: p.id,
+          zone: (p as any).zone?.name || '',
+          block: (p as any).block?.name || p.rack?.shelf?.block?.name || '',
+          shelf: p.rack?.shelf?.name || '',
+          rack: p.rack?.code || '',
+          availableQuantity: p.totalQuantity || 0,
+          storageDate: (p as any).storageDate,
+          expireDate: (p as any).expireDate,
+        };
+        entry.suggestedLocations.push(suggestion);
+        entry.totalAvailable += suggestion.availableQuantity;
+      }
+      response.results.push(entry);
+    }
+    return response;
   }
 
   async findAll(productFilter: ProductFilter): Promise<ResponseDTO> {
@@ -893,6 +953,72 @@ export class ProductService {
     }
     this.productRepository.save(products);
     return products;
+  }
+
+  /**
+   * Read-only suggestion: find suitable rack for each product without
+   * mutating DB (no rack.usedCapacity bump, no product.rack write).
+   * Used by inbound "Suggest location" UI so users can preview/confirm.
+   */
+  async suggestLocation(payload: SuggestLocationProduct): Promise<SuggestLocationItem[]> {
+    this.logger.log(`Request to suggest location (read-only): ${payload?.productIds?.length || 0} products`);
+    if (!payload?.productIds?.length) {
+      return [];
+    }
+
+    const recommendDTO = new RecommendDTO();
+    const reserved = new Map<number, number>(); // rackId -> reserved capacity within this batch
+    const results: SuggestLocationItem[] = [];
+
+    for (const id of payload.productIds) {
+      const product = await this.productRepository.createQueryBuilder('product')
+        .where('product.id = :id', { id: Number(id) })
+        .leftJoinAndSelect('product.masterProduct', 'masterProduct')
+        .leftJoinAndSelect('masterProduct.productCategory', 'productCategory')
+        .leftJoinAndSelect('productCategory.parentProductCategory', 'parentProductCategory')
+        .getOne();
+      if (!product?.masterProduct) {
+        continue;
+      }
+
+      const requiredCapacity = (product.totalQuantity || 0) * (product.masterProduct.capacity || 0);
+      recommendDTO.totalCapacity = requiredCapacity;
+      recommendDTO.parentProductCategoryId = product.masterProduct.productCategory?.parentProductCategory?.id;
+      recommendDTO.warehouseId = product.warehouseId;
+
+      let rack: Rack | null = null;
+      try {
+        rack = await this.racksService.recommendRackWithFallback(recommendDTO);
+      } catch {
+        rack = null;
+      }
+      if (!rack) {
+        continue;
+      }
+
+      // Soft reservation within this batch: avoid suggesting the same rack
+      // beyond its remaining capacity when multiple products are in one call.
+      const alreadyReserved = reserved.get(rack.id) || 0;
+      const remaining = rack.capacity - rack.usedCapacity - alreadyReserved;
+      if (remaining < requiredCapacity) {
+        // Try fallback ignoring this rack by skipping; for now, skip to keep code minimal.
+        continue;
+      }
+      reserved.set(rack.id, alreadyReserved + requiredCapacity);
+
+      results.push({
+        productId: Number(id),
+        rackId: rack.id,
+        rack: rack.code,
+        shelf: rack.shelf?.name,
+        block: rack.shelf?.block?.name,
+        zone: undefined,
+        availableCapacity: rack.capacity - rack.usedCapacity - alreadyReserved,
+        requiredCapacity,
+      });
+    }
+
+    return results;
   }
 
   async updateLocation(updateLocation: UpdateLocationProduct) {

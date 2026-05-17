@@ -13,10 +13,12 @@ export const PRODUCT_PATTERN = {
   PRODUCT_CANCEL_REALLOCATING: 'product_cancel_reallocating',
   PRODUCT_ADD_RACK: 'product_add_rack',
   PRODUCT_UPDATE_LOCATION: 'product_update_location',
+  PRODUCT_SUGGEST_LOCATION: 'product_suggest_location',
   PRODUCT_SCAN: 'product_scan',
   PRODUCT_SPLIT: 'product_split',
   PRODUCT_UPDATES: 'product_updates',
   PRODUCT_RECOMMEND: 'product_recommend',
+  PRODUCT_RECOMMEND_BATCH: 'product_recommend_batch',
   PRODUCT_CREATE_EXCEL: 'product_create_excel',
 };
 
