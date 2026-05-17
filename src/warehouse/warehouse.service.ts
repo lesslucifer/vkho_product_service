@@ -18,9 +18,13 @@ import { WarehouseGroupService } from 'src/warehouse-group/warehouse-group.servi
 import { UpdateWarehouseLogoDto } from './dto/update-warehouse-logo.dto';
 
 function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, value]) => value !== undefined),
-  ) as Partial<T>;
+  const result: Partial<T> = {};
+  for (const key of Object.keys(obj) as Array<keyof T>) {
+    if (obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
 }
 
 @Injectable()

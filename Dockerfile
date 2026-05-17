@@ -10,7 +10,7 @@ RUN yarn install --frozen-lockfile
 
 COPY . .
 
-RUN yarn run build
+RUN yarn run build && grep -q logoUrl dist/warehouse/entities/warehouse.entity.js
 
 # Build production node_modules stage
 FROM node:22.3.0 AS builder_prod
