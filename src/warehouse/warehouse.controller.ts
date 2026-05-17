@@ -9,6 +9,7 @@ import { IdsDTO } from 'src/common/list-id.dto';
 import { ResponseDTO } from 'src/common/response.dto';
 import { AddUserToWarehouse } from './dto/add-user-warehouse.dto';
 import { AddWarehouseGroupDto } from './dto/add-warehouse-group.dto';
+import { UpdateWarehouseLogoDto } from './dto/update-warehouse-logo.dto';
 
 @Controller()
 export class WarehouseController {
@@ -38,6 +39,11 @@ export class WarehouseController {
   @MessagePattern(WAREHOUSE_PATTERN.WAREHOUSE_UPDATE)
   update(@Payload() updateWarehouseDto: UpdateWarehouseDto) {
     return this.warehouseService.update(updateWarehouseDto.id, updateWarehouseDto);
+  }
+
+  @MessagePattern(WAREHOUSE_PATTERN.WAREHOUSE_UPDATE_LOGO)
+  updateLogo(@Payload() dto: UpdateWarehouseLogoDto) {
+    return this.warehouseService.updateLogo(dto);
   }
 
   @MessagePattern(WAREHOUSE_PATTERN.WAREHOUSE_DELETE)

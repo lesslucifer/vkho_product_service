@@ -15,6 +15,13 @@ import { Warehouse } from './entities/warehouse.entity';
 import { WarehouseStatus } from './enum/status.enum';
 import { AddWarehouseGroupDto } from './dto/add-warehouse-group.dto';
 import { WarehouseGroupService } from 'src/warehouse-group/warehouse-group.service';
+import { UpdateWarehouseLogoDto } from './dto/update-warehouse-logo.dto';
+
+function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
 
 @Injectable()
 export class WarehouseService {
@@ -158,7 +165,7 @@ export class WarehouseService {
     }
 
     const { id: _dtoId, ...fields } = currentWarehouse;
-    const updatePayload: Partial<Warehouse> = { ...fields };
+    const updatePayload: Partial<Warehouse> = pickDefined({ ...fields } as Record<string, unknown>);
 
     if (updatePayload.logoUrl !== undefined) {
       updatePayload.logoUrl = this.normalizeLogoUrl(updatePayload.logoUrl);
@@ -184,6 +191,43 @@ export class WarehouseService {
       return updateWarehouse;
     }
     throw new RpcException('Not found warehouse');
+  }
+
+  async updateLogo(dto: UpdateWarehouseLogoDto) {
+    const id = Number(dto.id);
+    if (!id) {
+      throw new RpcException('Warehouse id is required');
+    }
+
+    const existing = await this.warehouseRepository.findOne(id);
+    if (!existing) {
+      throw new RpcException('Not found warehouse');
+    }
+
+    const logoUrl = this.normalizeLogoUrl(dto.logoUrl);
+    try {
+      await this.warehouseRepository
+        .createQueryBuilder()
+        .update(Warehouse)
+        .set({ logoUrl })
+        .where('id = :id', { id })
+        .execute();
+    } catch (e) {
+      const message = e?.message || String(e);
+      this.logger.error(`Warehouse logo update failed for id=${id}: ${message}`, e?.stack);
+      if (/logoUrl|logo_url/i.test(message)) {
+        throw new RpcException(
+          'Database column logoUrl is missing. Run scripts/add-warehouse-logo-url.sql on product DB',
+        );
+      }
+      throw new RpcException(message || 'Failed to update warehouse logo');
+    }
+
+    const updated = await this.warehouseRepository.findOne(id);
+    if (!updated) {
+      throw new RpcException('Not found warehouse');
+    }
+    return updated;
   }
 
   private normalizeLogoUrl(logoUrl?: string | null): string | null {

@@ -3,6 +3,7 @@ export const WAREHOUSE_PATTERN = {
   WAREHOUSE_GET_ALL: 'warehouse_get_all',
   WAREHOUSE_GET_ONE: 'warehouse_get_one',
   WAREHOUSE_UPDATE: 'warehouse_update',
+  WAREHOUSE_UPDATE_LOGO: 'warehouse_update_logo',
   WAREHOUSE_DELETE: 'warehouse_delete',
   WAREHOUSE_DELETES: 'warehouse_deletes',
   WAREHOUSE_ADD_USER: 'warehouse_add_user',
