@@ -22,6 +22,7 @@ import { BomModule } from './bom/bom.module';
 import { WarehouseGroupModule } from './warehouse-group/warehouse-group.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { UserExpirationModule } from './user-expiration/user-expiration.module';
+import { ApiAuditLogModule } from './api-audit-log/api-audit-log.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { UserExpirationModule } from './user-expiration/user-expiration.module';
     ScheduleModule.forRoot(),
     DatabaseModule,
     UserExpirationModule,
+    ApiAuditLogModule,
     ProductModule,
     ZoneModule,
     ProductCategorysModule,
