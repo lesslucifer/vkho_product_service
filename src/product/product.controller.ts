@@ -8,6 +8,8 @@ import { ProductFilter } from './dto/filter-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { RackProductDTO } from './dto/rack-product.dto';
 import { IdsDTO } from 'src/common/list-id.dto';
+import { RecommendBatchRequest, RecommendBatchResponse } from './dto/recommend-batch.dto';
+import { SuggestLocationItem, SuggestLocationProduct } from './dto/suggest-location.dto';
 import { UpdateLocationProduct } from './dto/update-location-product.dto';
 import { ScanProduct } from './dto/scan-product.dto';
 import { SplitProduct } from './dto/split-product.dto';
@@ -41,6 +43,16 @@ export class ProductController {
   @MessagePattern(PRODUCT_PATTERN.PRODUCT_UPDATE_LOCATION)
   updateLocation(@Payload() updateLocationProduct: UpdateLocationProduct): Promise<Product[]> {
     return this.productService.updateLocation(updateLocationProduct);
+  }
+
+  @MessagePattern(PRODUCT_PATTERN.PRODUCT_SUGGEST_LOCATION)
+  suggestLocation(@Payload() payload: SuggestLocationProduct): Promise<SuggestLocationItem[]> {
+    return this.productService.suggestLocation(payload);
+  }
+
+  @MessagePattern(PRODUCT_PATTERN.PRODUCT_RECOMMEND_BATCH)
+  recommendBatch(@Payload() payload: RecommendBatchRequest): Promise<RecommendBatchResponse> {
+    return this.productService.recommendBatch(payload);
   }
 
   @MessagePattern(PRODUCT_PATTERN.PRODUCT_SCAN)
