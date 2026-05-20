@@ -23,6 +23,7 @@ import { WarehouseGroupModule } from './warehouse-group/warehouse-group.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { UserExpirationModule } from './user-expiration/user-expiration.module';
 import { IntegrationModule } from './integration/integration.module';
+import { ContractCustomerModule } from './contract-customer/contract-customer.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { IntegrationModule } from './integration/integration.module';
     DatabaseModule,
     UserExpirationModule,
     IntegrationModule,
+    ContractCustomerModule,
     ProductModule,
     ZoneModule,
     ProductCategorysModule,
