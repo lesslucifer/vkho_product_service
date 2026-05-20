@@ -34,6 +34,9 @@ export class Warehouse {
     @Column({ type: 'text', nullable: true })
     logoUrl: string;
 
+    @Column({ type: 'text', nullable: true })
+    deliveryNoteTemplate: string;
+
     @BeforeInsert()
     private beforeInsert() {
       this.status = WarehouseStatus.ENABLE;

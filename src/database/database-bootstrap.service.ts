@@ -38,5 +38,19 @@ export class DatabaseBootstrapService implements OnModuleInit {
       this.logger.error(`Failed to ensure ${tableName}.${columnName}: ${message}`);
       throw error;
     }
+
+    const templateColumn = metadata.findColumnWithPropertyName('deliveryNoteTemplate');
+    if (templateColumn) {
+      try {
+        await this.connection.query(
+          `ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS "${templateColumn.databaseName}" text`,
+        );
+        this.logger.log(`Ensured column ${tableName}.${templateColumn.databaseName} exists (delivery note template)`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Failed to ensure ${tableName}.${templateColumn.databaseName}: ${message}`);
+        throw error;
+      }
+    }
   }
 }

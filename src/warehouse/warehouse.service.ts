@@ -16,6 +16,12 @@ import { WarehouseStatus } from './enum/status.enum';
 import { AddWarehouseGroupDto } from './dto/add-warehouse-group.dto';
 import { WarehouseGroupService } from 'src/warehouse-group/warehouse-group.service';
 import { UpdateWarehouseLogoDto } from './dto/update-warehouse-logo.dto';
+import {
+  DEFAULT_DELIVERY_NOTE_TEMPLATE,
+  DeliveryNoteTemplateConfig,
+  GetDeliveryNoteTemplateDto,
+  UpdateDeliveryNoteTemplateDto
+} from './dto/delivery-note-template.dto';
 
 function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const result: Partial<T> = {};
@@ -282,5 +288,29 @@ export class WarehouseService {
       await this.warehouseRepository.update(warehouse.id, warehouse);
     }
     return { success: true, message: 'Warehouse group assigned successfully' };
+  }
+
+  async getPrintTemplate(dto: GetDeliveryNoteTemplateDto): Promise<DeliveryNoteTemplateConfig> {
+    const warehouse = await this.findOne(dto.warehouseId);
+    return this.parseDeliveryNoteTemplate(warehouse.deliveryNoteTemplate);
+  }
+
+  async updatePrintTemplate(dto: UpdateDeliveryNoteTemplateDto): Promise<DeliveryNoteTemplateConfig> {
+    const warehouse = await this.findOne(dto.warehouseId);
+    const templateJson = JSON.stringify({ ...DEFAULT_DELIVERY_NOTE_TEMPLATE, ...dto.template });
+    await this.warehouseRepository.update(warehouse.id, { deliveryNoteTemplate: templateJson });
+    return this.parseDeliveryNoteTemplate(templateJson);
+  }
+
+  private parseDeliveryNoteTemplate(raw?: string | null): DeliveryNoteTemplateConfig {
+    if (!raw) {
+      return { ...DEFAULT_DELIVERY_NOTE_TEMPLATE };
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_DELIVERY_NOTE_TEMPLATE, ...parsed };
+    } catch {
+      return { ...DEFAULT_DELIVERY_NOTE_TEMPLATE };
+    }
   }
 }

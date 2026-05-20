@@ -70,4 +70,14 @@ export class WarehouseController {
   addWarehouseGroup(@Payload() addWarehouseGroupDto: AddWarehouseGroupDto) {
     return this.warehouseService.addWarehouseGroup(addWarehouseGroupDto);
   }
+
+  @MessagePattern(WAREHOUSE_PATTERN.WAREHOUSE_GET_PRINT_TEMPLATE)
+  getPrintTemplate(@Payload() dto: import('./dto/delivery-note-template.dto').GetDeliveryNoteTemplateDto) {
+    return this.warehouseService.getPrintTemplate(dto);
+  }
+
+  @MessagePattern(WAREHOUSE_PATTERN.WAREHOUSE_UPDATE_PRINT_TEMPLATE)
+  updatePrintTemplate(@Payload() dto: import('./dto/delivery-note-template.dto').UpdateDeliveryNoteTemplateDto) {
+    return this.warehouseService.updatePrintTemplate(dto);
+  }
 }

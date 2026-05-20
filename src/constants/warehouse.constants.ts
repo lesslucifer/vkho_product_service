@@ -8,7 +8,9 @@ export const WAREHOUSE_PATTERN = {
   WAREHOUSE_DELETES: 'warehouse_deletes',
   WAREHOUSE_ADD_USER: 'warehouse_add_user',
   WAREHOUSE_UPDATE_USER: 'warehouse_update_user',
-  WAREHOUSE_ADD_WAREHOUSE_GROUP: 'warehouse_add_warehouse_group'
+  WAREHOUSE_ADD_WAREHOUSE_GROUP: 'warehouse_add_warehouse_group',
+  WAREHOUSE_GET_PRINT_TEMPLATE: 'warehouse_get_print_template',
+  WAREHOUSE_UPDATE_PRINT_TEMPLATE: 'warehouse_update_print_template'
 };
 
 export const WAREHOUSE_CODE_PATTERN = "WH_";
